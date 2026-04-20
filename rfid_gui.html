@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RFID Kit Manager</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg:     #0d0f14;
+    --panel:  #13161e;
+    --border: #1f2330;
+    --accent: #00e5ff;
+    --accent2:#ff6b35;
+    --ok:     #00e676;
+    --warn:   #ffea00;
+    --err:    #ff1744;
+    --bad:    #aa00ff;
+    --text:   #c8d0e0;
+    --muted:  #4a5068;
+    --mono:   'Share Tech Mono', monospace;
+    --sans:   'Barlow', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px;
+    display: grid; grid-template-rows: auto 1fr;
+    height: 100vh; overflow: hidden;
+  }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .logo { font-family: var(--mono); font-size: 18px; letter-spacing: 4px; color: var(--accent); }
+  .logo span { color: var(--muted); }
+  .hdr-right { display: flex; align-items: center; gap: 20px; font-family: var(--mono); font-size: 12px; }
+  .indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--err); box-shadow: 0 0 6px var(--err); transition: all .3s; }
+  .indicator.on   { background: var(--ok);   box-shadow: 0 0 8px var(--ok); }
+  .indicator.busy { background: var(--warn); box-shadow: 0 0 8px var(--warn); animation: blink .7s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:.2} }
+  #status-text { color: var(--muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .temp-chip { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; }
+  .temp-val { color:var(--text); }
+  .temp-val.warm { color:var(--warn); }
+  .temp-val.hot  { color:var(--err); }
+
+  main { display:grid; grid-template-columns:290px 1fr; overflow:hidden; }
+
+  /* Sidebar */
+  aside {
+    background:var(--panel); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; overflow-y:auto;
+    padding:18px 16px; gap:18px;
+  }
+  .sec-label { font-family:var(--mono); font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:8px; }
+  label { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; display:block; margin-bottom:4px; }
+  input[type="text"], input[type="number"] {
+    background:var(--bg); border:1px solid var(--border); border-radius:4px;
+    color:var(--text); font-family:var(--mono); font-size:14px;
+    padding:8px 10px; outline:none; width:100%; transition:border-color .2s;
+  }
+  input:focus { border-color:var(--accent); }
+  .power-hint { font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:3px; }
+  .power-hint span { color:var(--accent); }
+  .power-hint em   { color:var(--warn); font-style:normal; }
+  .field { margin-bottom:10px; }
+  .btn { border:none; border-radius:4px; cursor:pointer; font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:1px; padding:9px 12px; text-transform:uppercase; transition:all .15s; width:100%; }
+  .btn:disabled { opacity:.35; cursor:not-allowed; }
+  .btn-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn-connect    { background:var(--accent); color:#000; }
+  .btn-connect:hover:not(:disabled) { filter:brightness(1.15); }
+  .btn-disconnect { background:transparent; border:1px solid var(--err); color:var(--err); }
+  .btn-disconnect:hover:not(:disabled) { background:var(--err); color:#fff; }
+  .btn-scan { background:var(--bg); border:1px solid var(--accent); color:var(--accent); }
+  .btn-scan:hover:not(:disabled) { background:var(--accent); color:#000; }
+  .btn-write-part { background:var(--accent2); color:#fff; }
+  .btn-write-part:hover:not(:disabled) { filter:brightness(1.15); }
+  .btn-write-kit  { background:transparent; border:1px solid var(--accent2); color:var(--accent2); }
+  .btn-write-kit:hover:not(:disabled) { background:var(--accent2); color:#fff; }
+  .btn-csv { background:transparent; border:1px solid var(--muted); color:var(--muted); font-size:11px; padding:7px 10px; }
+  .btn-csv:hover:not(:disabled) { border-color:var(--ok); color:var(--ok); }
+  .btn-import { background:transparent; border:1px solid var(--muted); color:var(--muted); font-size:11px; padding:7px 10px; }
+  .btn-import:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-clear-tbl { background:transparent; border:1px solid var(--err); color:var(--err); font-size:11px; padding:7px 10px; }
+  .btn-clear-tbl:hover { background:var(--err); color:#fff; }
+  hr { border:none; border-top:1px solid var(--border); }
+
+  /* Right — flex column so panels can be resized by drag handles */
+  .right { display:flex; flex-direction:column; overflow:hidden; }
+
+  /* Tag panel */
+  .tag-panel { overflow:auto; padding:16px 20px; display:flex; flex-direction:column; flex-shrink:0; }
+
+  .tag-toolbar {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px; gap:12px; flex-wrap:wrap;
+  }
+  .tag-count { font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:2px; white-space:nowrap; }
+  .tag-count strong { color:var(--accent); font-size:22px; vertical-align:middle; margin-right:4px; }
+
+  .sort-btns { display:flex; gap:6px; align-items:center; }
+  .sort-btn {
+    background:transparent; border:1px solid var(--border); border-radius:3px;
+    color:var(--muted); cursor:pointer; font-family:var(--mono); font-size:10px;
+    letter-spacing:1px; padding:4px 8px; text-transform:uppercase; transition:all .15s;
+  }
+  .sort-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .sort-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,229,255,.08); }
+  .sort-btn.active.desc::after { content:' ↓'; }
+  .sort-btn.active:not(.desc)::after { content:' ↑'; }
+
+  table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px; }
+  thead th {
+    background:var(--panel); border-bottom:1px solid var(--border);
+    color:var(--muted); font-size:10px; letter-spacing:2px;
+    padding:9px 10px; text-align:left; text-transform:uppercase;
+    position:sticky; top:0;
+  }
+  tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
+  tbody tr:hover { background:var(--panel); }
+  td { padding:8px 10px; }
+  .num-cell  { color:var(--accent); font-weight:600; }
+  .epc-cell  { color:var(--text); letter-spacing:1px; }
+  .rssi-cell { color:var(--muted); }
+  .cnt-cell  { color:var(--muted); text-align:center; }
+
+  .badge { border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; padding:2px 6px; text-transform:uppercase; position:relative; cursor:default; }
+  .badge::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2330;
+    border: 1px solid #2d3348;
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.5;
+    padding: 6px 10px;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 999;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    max-width: 280px;
+    white-space: normal;
+    text-align: left;
+  }
+  .badge:hover::after { opacity: 1; }
+  .b-ok   { background:rgba(0,230,118,.15); color:var(--ok); }
+  .b-part { background:rgba(0,229,255,.1);  color:var(--accent); }
+  .b-raw  { background:rgba(74,80,104,.3);  color:var(--muted); }
+  .b-bad  { background:rgba(170,0,255,.15); color:var(--bad); }
+
+  .empty { text-align:center; padding:60px; color:var(--muted); font-family:var(--mono); }
+  .empty-icon { font-size:36px; opacity:.25; margin-bottom:10px; }
+
+  /* Log */
+  .log-panel { background:#0a0c10; border-top:none; display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+  .log-hdr { display:flex; justify-content:space-between; align-items:center; padding:7px 14px; border-bottom:1px solid var(--border); }
+  .log-hdr-label { font-family:var(--mono); font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; }
+  .btn-clr { background:none; border:none; color:var(--muted); cursor:pointer; font-family:var(--mono); font-size:10px; }
+  .btn-clr:hover { color:var(--text); }
+  #log { flex:1; overflow-y:auto; padding:8px 14px; font-family:var(--mono); font-size:11px; line-height:1.7; }
+  #log div { display:block; }
+  #log .ok   { color:var(--ok); }
+  #log .err  { color:var(--err); }
+  #log .warn { color:var(--warn); }
+  #log .bad  { color:var(--bad); }
+  #log .skip { color:var(--muted); }
+  #log .info { color:var(--accent); }
+  #log .dim  { color:#2a3040; }
+
+  .btn-bom { background:transparent; border:1px solid var(--accent2); color:var(--accent2); }
+  .btn-bom:hover:not(:disabled){ background:var(--accent2); color:#fff; }
+
+  /* BOM results panel */
+  .bom-panel { background:var(--bg); border-top:none; display:none; flex-direction:column; overflow:hidden; flex-shrink:0; }
+  .bom-panel.visible { display:flex; }
+  .bom-hdr { display:flex; align-items:center; justify-content:space-between; padding:7px 14px; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--panel); }
+  .bom-hdr-label { font-family:var(--mono); font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; }
+  .bom-summary { display:flex; gap:20px; padding:8px 14px; font-family:var(--mono); font-size:12px; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--panel); flex-wrap:wrap; }
+  .bom-table-wrap { overflow-y:auto; flex:1; }
+  .drag-handle {
+    height: 5px;
+    background: var(--border);
+    cursor: ns-resize;
+    flex-shrink: 0;
+    transition: background .15s;
+    position: relative;
+  }
+  .drag-handle:hover, .drag-handle.dragging { background: var(--accent); }
+  .drag-handle::after {
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%,-50%);
+    width: 32px; height: 2px;
+    border-radius: 1px;
+    background: rgba(255,255,255,.15);
+  }
+
+  /* Write results panel */
+  .write-panel {
+    border-top: none;
+    background: var(--panel);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .write-panel.visible { display: flex; }
+
+  .write-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .write-hdr-label { font-family: var(--mono); font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+
+  .write-summary {
+    display: flex; gap: 20px; padding: 8px 14px;
+    font-family: var(--mono); font-size: 12px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .ws-item { display: flex; flex-direction: column; gap: 2px; }
+  .ws-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .ws-val { font-size: 18px; font-weight: 700; }
+  .ws-val.ok   { color: var(--ok); }
+  .ws-val.err  { color: var(--err); }
+  .ws-val.skip { color: var(--muted); }
+  .ws-val.info { color: var(--accent); }
+
+  .write-table-wrap { overflow-y: auto; flex: 1; }
+  .write-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  .write-table th {
+    background: var(--bg); color: var(--muted); font-size: 9px;
+    letter-spacing: 2px; padding: 6px 10px; text-align: left;
+    text-transform: uppercase; position: sticky; top: 0;
+  }
+  .write-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .wr-ok   { color: var(--ok); }
+  .wr-err  { color: var(--err); }
+  .wr-warn { color: var(--warn); }
+  .wr-skip { color: var(--muted); }
+  .wr-bad  { color: var(--bad); }
+
+  .sweep { display:none; position:fixed; inset:0; pointer-events:none; z-index:999; }
+  .sweep.on { display:block; }
+  .sweep::after { content:''; position:absolute; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent); animation:sweep 1.4s linear infinite; }
+  @keyframes sweep { 0%{top:-2px}100%{top:100%} }
+</style>
+</head>
+<body>
+<div class="sweep" id="sweep"></div>
+<input type="file" id="csv-file-input" accept=".csv" style="display:none" onchange="handleCSVFile(event)">
+
+<header>
+  <div class="logo">RFID<span>//</span>KIT MANAGER</div>
+  <div class="hdr-right">
+    <div class="temp-chip">TEMP <span class="temp-val" id="tv">--</span>°C</div>
+    <div class="indicator" id="ind"></div>
+    <span id="status-text">Not connected</span>
+  </div>
+</header>
+
+<main>
+<aside>
+  <div>
+    <div class="sec-label">Connection</div>
+    <div class="field"><label>COM Port</label><input type="text" id="port" value="COM3"></div>
+    <div class="field">
+      <label>RF Power (centidBm)</label>
+      <input type="number" id="power" value="2700" min="0" max="2700" step="100" oninput="updPwr()">
+      <div class="power-hint">= <span id="pdbm">27.00</span> dBm &nbsp;|&nbsp; USB safe: <em>≤22.00</em></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-connect"    id="bc" onclick="doConnect()">Connect</button>
+      <button class="btn btn-disconnect" id="bd" onclick="doDisconnect()" disabled>Disconnect</button>
+    </div>
+  </div>
+
+  <hr>
+
+  <div>
+    <div class="sec-label">Inventory</div>
+    <button class="btn btn-scan" id="bs" onclick="doScan()" disabled>▶ Scan Tags</button>
+    <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="btn btn-csv" id="bcsv" onclick="doCSV()" disabled>↓ Export CSV</button>
+      <button class="btn btn-import" onclick="doImportCSV()">↑ Import CSV</button>
+    </div>
+  </div>
+
+  <hr>
+
+  <div>
+    <div class="sec-label">Write Part Number</div>
+    <div class="field"><label>Part # (0–9999)</label><input type="number" id="part" min="0" max="9999" placeholder="e.g. 0042"></div>
+    <button class="btn btn-write-part" id="bwp" onclick="doWritePart()" disabled>✎ Write Part</button>
+  </div>
+
+  <hr>
+
+  <div>
+    <div class="sec-label">Write Kit Number</div>
+    <div class="field"><label>Kit # (0–9999)</label><input type="number" id="kit" min="0" max="9999" placeholder="e.g. 0001"></div>
+    <button class="btn btn-write-kit" id="bwk" onclick="doWriteKit()" disabled>✎ Write Kit</button>
+  </div>
+
+  <hr>
+
+  <div>
+    <div class="sec-label">BOM Verification</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
+      Checks each kit against the full BOM. Every part in the BOM must be present in each kit.
+    </div>
+    <button class="btn btn-bom" id="bbom" onclick="doBomCheck()">⊞ Check BOM</button>
+  </div>
+</aside>
+
+<div class="right">
+  <div class="tag-panel">
+    <div class="tag-toolbar">
+      <div class="tag-count"><strong id="tc">0</strong> UNIQUE TAGS</div>
+      <div class="sort-btns">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;">SORT</span>
+        <button class="sort-btn" id="sort-part" onclick="setSort('part')">PART #</button>
+        <button class="sort-btn" id="sort-kit"  onclick="setSort('kit')">KIT #</button>
+        <button class="sort-btn" id="sort-rssi" onclick="setSort('rssi')">RSSI</button>
+        <button class="sort-btn" id="sort-cnt"  onclick="setSort('count')">READS</button>
+        <button class="btn-clear-tbl" onclick="clearTable()">✕ CLEAR</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Part #</th>
+          <th>Kit #</th>
+          <th>EPC</th>
+          <th>RSSI</th>
+          <th>Reads</th>
+        </tr>
+      </thead>
+      <tbody id="tb">
+        <tr><td colspan="6"><div class="empty"><div class="empty-icon">◎</div><div>Connect and scan to see tags</div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="drag-handle" id="dh1"></div>
+
+  <!-- Write Results Panel -->
+  <div class="write-panel" id="write-panel">
+    <div class="write-hdr">
+      <span class="write-hdr-label">Last Write Results</span>
+      <button class="btn-clr" onclick="document.getElementById('write-panel').className='write-panel'">CLEAR</button>
+    </div>
+    <div class="write-summary" id="write-summary"></div>
+    <div class="write-table-wrap">
+      <table class="write-table">
+        <thead><tr><th>Result</th><th>EPC</th><th>Detail</th></tr></thead>
+        <tbody id="write-tb"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="drag-handle" id="dh2"></div>
+
+  <!-- BOM Results Panel -->
+  <div class="bom-panel" id="bom-panel">
+    <div class="bom-hdr">
+      <span class="bom-hdr-label">BOM Verification Results</span>
+      <button class="btn-clr" onclick="document.getElementById('bom-panel').className='bom-panel'">CLEAR</button>
+    </div>
+    <div class="bom-summary" id="bom-summary"></div>
+    <div class="bom-table-wrap" id="bom-table-wrap"></div>
+  </div>
+
+  <div class="drag-handle" id="dh3"></div>
+
+  <div class="log-panel">
+    <div class="log-hdr">
+      <span class="log-hdr-label">Operation Log</span>
+      <button class="btn-clr" onclick="document.getElementById('log').innerHTML=''">CLEAR</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+</main>
+
+<script>
+const API = 'http://localhost:8765';
+let connected = false;
+let busy      = false;
+
+// ── Persistent tag store: keyed by EPC ──
+let tagStore = {};  // { epc: {epc, part, kit, rssi, programmed, bad, count} }
+let sortKey  = 'part';
+let sortDesc = false;
+
+// ── Helpers ──
+function updPwr(){
+  const v=parseInt(document.getElementById('power').value)||0;
+  document.getElementById('pdbm').textContent=(v/100).toFixed(2);
+}
+
+function log(msg,cls){
+  const el=document.getElementById('log');
+  const s=document.createElement('div');
+  s.className=cls||'info';
+  s.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(s);
+  el.scrollTop=el.scrollHeight;
+}
+
+function setStatus(msg,conn,isBusy){
+  document.getElementById('status-text').textContent=msg;
+  connected=conn; busy=isBusy;
+  document.getElementById('ind').className='indicator'+(isBusy?' busy':conn?' on':'');
+  document.getElementById('sweep').className=isBusy?'sweep on':'sweep';
+  document.getElementById('bc').disabled   = conn||isBusy;
+  document.getElementById('bd').disabled   = !conn||isBusy;
+  document.getElementById('bs').disabled   = !conn||isBusy;
+  document.getElementById('bwp').disabled  = !conn||isBusy;
+  document.getElementById('bwk').disabled  = !conn||isBusy;
+  document.getElementById('bcsv').disabled = !conn||isBusy;
+}
+
+function setTemp(t){
+  const el=document.getElementById('tv');
+  el.textContent=t<0?'--':t;
+  el.className='temp-val'+(t>55?' hot':t>45?' warm':'');
+}
+
+// ── Tag store management ──
+// Keyed by EPC — each physical tag has a unique EPC
+function mergeTags(newTags){
+  newTags.forEach(t=>{
+    if(tagStore[t.epc]){
+      const ex=tagStore[t.epc];
+      if(t.rssi>ex.rssi) ex.rssi=t.rssi;
+      ex.count++;
+      if(t.programmed) ex.programmed=true;
+      if(t.part&&t.part!==65535&&t.part!==0) ex.part=t.part;
+      if(t.kit &&t.kit !==65535&&t.kit !==0) ex.kit =t.kit;
+      if(t.bad) ex.bad=true;
+    } else {
+      tagStore[t.epc]={...t, count:1};
+    }
+  });
+  renderTable();
+}
+
+function clearTable(){
+  tagStore={};
+  renderTable();
+  log('Tag table cleared','warn');
+}
+
+// ── Sort ──
+function setSort(key){
+  if(sortKey===key) sortDesc=!sortDesc;
+  else { sortKey=key; sortDesc=false; }
+  // Update sort button styles
+  ['part','kit','rssi','count'].forEach(k=>{
+    const btn=document.getElementById('sort-'+k);
+    if(!btn) return;
+    btn.className='sort-btn'+(sortKey===k?' active'+(sortDesc?' desc':''):'');
+  });
+  renderTable();
+}
+
+function renderTable(){
+  const tags=Object.values(tagStore);
+  document.getElementById('tc').textContent=tags.length;
+  const tb=document.getElementById('tb');
+  if(!tags.length){
+    tb.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">◎</div><div>No tags — scan to populate</div></div></td></tr>';
+    return;
+  }
+
+  // Sort
+  tags.sort((a,b)=>{
+    let av,bv;
+    if(sortKey==='rssi'){ av=a.rssi; bv=b.rssi; }
+    else if(sortKey==='count'){ av=a.count; bv=b.count; }
+    else if(sortKey==='kit'){ av=a.kit===65535?99999:a.kit; bv=b.kit===65535?99999:b.kit; }
+    else { av=a.part===65535?99999:a.part; bv=b.part===65535?99999:b.part; }
+    return sortDesc ? bv-av : av-bv;
+  });
+
+  tb.innerHTML=tags.map(t=>{
+    let b,bc,tip;
+    if(t.bad)            {b='LOCKED';bc='b-bad'; tip='Failed all 3 write attempts — tag is defective or write-protected. Will not be written to again this session.';}
+    else if(t.programmed){b='FULL';  bc='b-ok';  tip='Fully programmed — has both a part number and a kit number. Ready for inventory.';}
+    else if(t.part>0&&t.part!==65535){b='PART';bc='b-part'; tip='Partially programmed — has a part number but no kit number yet. Run Write Kit (Phase 2) to complete.';}
+    else                 {b='RAW';   bc='b-raw'; tip='Blank tag — no part or kit number written. Run Write Part (Phase 1) to begin programming.';}
+
+    const ps=(t.part===65535||t.part===0)?'—':String(t.part).padStart(4,'0');
+    const ks=(t.kit ===65535||t.kit ===0)?'—':String(t.kit).padStart(4,'0');
+
+    return `<tr>
+      <td><span class="badge ${bc}" title="${tip}">${b}</span></td>
+      <td class="num-cell">${ps}</td>
+      <td class="num-cell">${ks}</td>
+      <td class="epc-cell">${t.epc}</td>
+      <td class="rssi-cell">${t.rssi} dBm</td>
+      <td class="cnt-cell">${t.count}</td>
+    </tr>`;
+  }).join('');
+}
+
+function parseLog(raw){
+  if(!raw) return;
+  raw=raw.replace(/\\n/g,'\n').replace(/\\r/g,'').replace(/\\t/g,'  ');
+  raw.split('\n').forEach(line=>{
+    line=line.trimEnd();
+    if(!line.trim()) return;
+    let cls='info';
+    const t=line.trim();
+    if(t.startsWith('[ OK')||t.startsWith('[OK'))           cls='ok';
+    else if(t.startsWith('[ERR')||t.startsWith('[ ERR'))    cls='err';
+    else if(t.startsWith('[WARN')||t.startsWith('[BAD'))    cls='warn';
+    else if(t.startsWith('[SKIP'))                          cls='skip';
+    else if(t.startsWith('==='))                            cls='dim';
+    else if(t.startsWith('Connecting')||t.startsWith('Config')) cls='info';
+    else if(t.startsWith('Scanning')||t.startsWith('Detected')||
+            t.startsWith('Raw reads')||t.startsWith('Pass')) cls='info';
+    else if(t.startsWith('- Batch')||t.startsWith('- Result')) cls='ok';
+    else if(t.includes('error')||t.includes('Error')||
+            t.includes('FAILED')||t.includes('failed'))     cls='err';
+    else if(t.startsWith('Settling')||t.startsWith('Holding')||
+            t.startsWith('Waiting')||t.startsWith('retry')||
+            t.startsWith('(retry'))                         cls='skip';
+    else cls='dim';
+    log(line,cls);
+  });
+}
+
+// ── Write results panel ──
+function renderWriteResults(rawLog, label){
+  if(!rawLog) return;
+  const lines = rawLog.replace(/\\n/g,'\n').replace(/\\r/g,'').split('\n');
+  let found=0, wrote=0, errors=0, skipped=0, nopart=0;
+  const rows = [];
+  const pendingOld = {};
+
+  lines.forEach(line=>{
+    const t=line.trim(); if(!t) return;
+    const epcRe=/([0-9A-Fa-f]{24})/;
+    const dm=t.match(/Detected\s+(\d+)/); if(dm) found=parseInt(dm[1]);
+    const wm=t.match(/(\d+)\s+written/);  if(wm) wrote=parseInt(wm[1]);
+    const em=t.match(/(\d+)\s+errors?/);  if(em) errors=parseInt(em[1]);
+    const sm=t.match(/(\d+)\s+skipped/);  if(sm) skipped=parseInt(sm[1]);
+    const nm=t.match(/(\d+)\s+no-part/);  if(nm) nopart=parseInt(nm[1]);
+
+    if(t.startsWith('[WARN]')){
+      const epcm=t.match(epcRe); if(!epcm) return;
+      const valm=t.match(/(?:Part#|Kit#)\s*(\d+)/i);
+      pendingOld[epcm[1]]=valm?valm[1].padStart(4,'0'):'?';
+      return;
+    }
+    if(t.startsWith('[ OK]')||t.startsWith('[ OK ]')){
+      const epcm=t.match(epcRe); if(!epcm) return;
+      const epc=epcm[1];
+      const newm=t.match(/(?:Part#|Kit#)\s*(\d+)/gi);
+      const newVal=newm?newm[newm.length-1].replace(/\s+/,' '):'—';
+      const allEpc=[...t.matchAll(/([0-9A-Fa-f]{24})/g)];
+      const newEpc=allEpc.length>1?allEpc[allEpc.length-1][1]:epc;
+      rows.push({ok:true,epc,newEpc,oldVal:pendingOld[epc]||'—',newVal,detail:'Wrote successfully'});
+      delete pendingOld[epc];
+    } else if(t.startsWith('[ERR]')||t.startsWith('[ ERR]')){
+      const epcm=t.match(epcRe); if(!epcm) return;
+      const epc=epcm[1];
+      rows.push({ok:false,epc,newEpc:epc,oldVal:pendingOld[epc]||'—',newVal:'—',detail:'Failed after 3 attempts'});
+      delete pendingOld[epc];
+    } else if(t.startsWith('[SKIP]')){
+      const epcm=t.match(epcRe); if(!epcm) return;
+      const epc=epcm[1];
+      const valm=t.match(/(?:Part#|Kit#)\s*(\d+)/i);
+      rows.push({ok:null,epc,newEpc:epc,oldVal:valm?valm[1].padStart(4,'0'):'—',newVal:'—',detail:'Already correct — skipped'});
+    } else if(t.startsWith('[BAD]')||t.startsWith('[BAD ]')){
+      const epcm=t.match(epcRe); if(!epcm) return;
+      rows.push({ok:false,epc:epcm[1],newEpc:epcm[1],oldVal:'—',newVal:'—',detail:'Write-protected / locked tag'});
+    } else if(t.includes('no part number')){
+      const epcm=t.match(epcRe); if(!epcm) return;
+      rows.push({ok:false,epc:epcm[1],newEpc:epcm[1],oldVal:'none',newVal:'—',detail:'No part # — run Phase 1 first'});
+    }
+  });
+
+  document.getElementById('write-summary').innerHTML=`
+    <div class="ws-item"><div class="ws-label">Detected</div><div class="ws-val info">${found}</div></div>
+    <div class="ws-item"><div class="ws-label">Written</div><div class="ws-val ok">${wrote}</div></div>
+    <div class="ws-item"><div class="ws-label">Errors</div><div class="ws-val ${errors>0?'err':'skip'}">${errors}</div></div>
+    <div class="ws-item"><div class="ws-label">Skipped</div><div class="ws-val skip">${skipped}</div></div>
+    ${nopart>0?`<div class="ws-item"><div class="ws-label">No Part</div><div class="ws-val warn">${nopart}</div></div>`:''}
+    <div class="ws-item" style="margin-left:auto;text-align:right">
+      <div class="ws-label">Operation</div>
+      <div class="ws-val info" style="font-size:13px">${label}</div>
+    </div>`;
+
+  document.getElementById('write-panel').querySelector('thead').innerHTML=
+    '<tr><th>Result</th><th>Old</th><th>New</th><th>EPC</th><th>Detail</th></tr>';
+
+  document.getElementById('write-tb').innerHTML = rows.length
+    ? rows.map(r=>{
+        const badge=r.ok===true?`<span class="badge b-ok">OK</span>`
+                   :r.ok===false?`<span class="badge b-bad">FAIL</span>`
+                   :`<span class="badge b-raw">SKIP</span>`;
+        const dc=r.ok===true?'wr-ok':r.ok===false?'wr-err':'wr-skip';
+        return `<tr>
+          <td>${badge}</td>
+          <td class="wr-skip" style="font-size:11px">${r.oldVal}</td>
+          <td class="${r.ok===true?'wr-ok':'wr-skip'}" style="font-size:11px">${r.newVal}</td>
+          <td class="epc-cell" style="font-size:10px">${r.newEpc}</td>
+          <td class="${dc}" style="font-size:11px">${r.detail}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="5" style="color:var(--muted);padding:10px;font-family:var(--mono);font-size:11px">No tag results in output</td></tr>`;
+
+  document.getElementById('write-panel').className='write-panel visible';
+}
+
+
+async function fetchWithTimeout(url,options,ms){
+  const ctrl=new AbortController();
+  const id=setTimeout(()=>ctrl.abort(),ms);
+  try{ const r=await fetch(url,{...options,signal:ctrl.signal}); clearTimeout(id); return r; }
+  catch(e){ clearTimeout(id); throw e; }
+}
+
+// ── Actions ──
+async function doConnect(){
+  const port=document.getElementById('port').value.trim();
+  const power=parseInt(document.getElementById('power').value)||2700;
+  if(!port){log('Enter a COM port','err');return;}
+  setStatus('Connecting...', false, true);
+  log(`Connecting to ${port} at ${(power/100).toFixed(2)} dBm...`,'info');
+  try{
+    const r=await fetchWithTimeout(`${API}/connect`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({port,power})
+    },12000);
+    const d=await r.json();
+    setStatus(d.message,d.ok,false);
+    log(d.message,d.ok?'ok':'err');
+  } catch(e){
+    setStatus('Server offline — is rfid_server.exe running?',false,false);
+    log('Cannot reach server. Run bin\\rfid_server.exe first.','err');
+  }
+}
+
+async function doDisconnect(){
+  try{ await fetch(`${API}/disconnect`,{method:'POST'}); } catch(e){}
+  setStatus('Disconnected',false,false);
+  log('Disconnected','warn');
+}
+
+let silentScan = false;  // when true, scan results go to write panel only
+
+async function doScan(){
+  setStatus('Scanning...',true,true);
+  if(!silentScan) log('Scanning (3 passes x 1s)...','info');
+  try{
+    const r=await fetchWithTimeout(`${API}/scan`,{method:'POST'},20000);
+    const d=await r.json();
+    if(d.error){log(d.error,'err');setStatus(d.error,true,false);return;}
+    if(!silentScan){
+      if(d.log) parseLog(d.log);
+      mergeTags(d.tags||[]);
+    }
+    setStatus(d.message,true,false);
+    return d;
+  } catch(e){
+    log('Scan failed: '+e.message,'err');
+    setStatus('Scan failed - check server console',true,false);
+    return null;
+  }
+}
+
+async function doWritePart(){
+  const part=parseInt(document.getElementById('part').value);
+  if(isNaN(part)||part<0||part>9999){log('Enter a valid part number 0-9999','err');return;}
+  setStatus('Writing part...',true,true);
+  log(`Writing Part# ${String(part).padStart(4,'0')} to tags in field...`,'info');
+  try{
+    const r=await fetchWithTimeout(`${API}/write/part`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({part})
+    },40000);
+    const d=await r.json();
+    if(d.error){log(d.error,'err');setStatus(d.error,true,false);return;}
+    renderWriteResults(d.log,`Part# ${String(part).padStart(4,'0')}`);
+    log(d.message,'info');
+    // Rescan silently — only updates write panel, not tag table
+    setStatus('Rescanning...',true,true);
+    silentScan=true;
+    await doScan();
+    silentScan=false;
+  } catch(e){
+    silentScan=false;
+    log('Write failed: '+e.message,'err');
+    setStatus('Write failed',true,false);
+  }
+}
+
+async function doWriteKit(){
+  const kit=parseInt(document.getElementById('kit').value);
+  if(isNaN(kit)||kit<0||kit>9999){log('Enter a valid kit number 0-9999','err');return;}
+  setStatus('Writing kit...',true,true);
+  log(`Writing Kit# ${String(kit).padStart(4,'0')} to tags in field...`,'info');
+  try{
+    const r=await fetchWithTimeout(`${API}/write/kit`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kit})
+    },40000);
+    const d=await r.json();
+    if(d.error){log(d.error,'err');setStatus(d.error,true,false);return;}
+    renderWriteResults(d.log,`Kit# ${String(kit).padStart(4,'0')}`);
+    log(d.message,'info');
+    setStatus('Rescanning...',true,true);
+    silentScan=true;
+    await doScan();
+    silentScan=false;
+  } catch(e){
+    silentScan=false;
+    log('Write failed: '+e.message,'err');
+    setStatus('Write failed',true,false);
+  }
+}
+
+async function doCSV(){
+  const tags=Object.values(tagStore);
+  if(!tags.length){log('No tags in table — scan first','warn');return;}
+
+  try{
+    /* POST the current tag store so the server writes a matching CSV */
+    const postR=await fetchWithTimeout(`${API}/csv`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({tags})
+    },5000);
+    const postD=await postR.json();
+    if(!postD.ok){log('CSV write failed: '+(postD.error||'unknown'),'err');return;}
+    log(`CSV saved (${postD.rows} rows)`,'ok');
+
+    /* GET the file as a download */
+    const r=await fetch(`${API}/csv`);
+    if(!r.ok){log('CSV download failed','err');return;}
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=Object.assign(document.createElement('a'),{
+      href:url,download:`rfid_inventory_${new Date().toISOString().slice(0,10)}.csv`});
+    a.click();
+    URL.revokeObjectURL(url);
+    log('CSV downloaded','ok');
+  } catch(e){log('Export failed: '+e.message,'err');}
+}
+
+// ── BOM Verification ──
+let bomData = null;  // cached after first load
+
+async function loadBom(){
+  try{
+    const r = await fetchWithTimeout(`${API}/bom`,{},12000);
+    const d = await r.json();
+    if(d.error){ log('BOM load failed: '+d.error,'err'); return null; }
+    bomData = d.parts;
+    log(`BOM loaded — ${bomData.length} parts expected per kit`,'ok');
+    return bomData;
+  } catch(e){
+    log('BOM load failed: '+e.message,'err');
+    return null;
+  }
+}
+
+async function doBomCheck(){
+  // Load BOM if not yet cached
+  if(!bomData){
+    log('Loading BOM...','info');
+    const loaded = await loadBom();
+    if(!loaded) return;
+  }
+
+  // All parts in the BOM
+  const expectedParts = bomData.map(p => p.rfid);
+
+  // Need tags in the table
+  const tags = Object.values(tagStore);
+  if(!tags.length){
+    log('No tags in table — scan first then check BOM','warn');
+    return;
+  }
+
+  // Group scanned tags by kit number
+  const kits = {};
+  tags.forEach(t=>{
+    if(!t.kit || t.kit === 65535 || t.kit === 0) return;
+    const k = String(t.kit).padStart(4,'0');
+    if(!kits[k]) kits[k] = new Set();
+    kits[k].add(String(t.part).padStart(4,'0'));
+  });
+
+  const kitNumbers = Object.keys(kits).sort();
+  if(!kitNumbers.length){
+    log('No kit numbers found — make sure tags have been written with kit numbers','warn');
+    return;
+  }
+
+  // Build per-kit results
+  let totalKits=0, passKits=0, failKits=0, totalMissing=0;
+  const html = [];
+
+  kitNumbers.forEach(kitNum=>{
+    totalKits++;
+    const scanned = kits[kitNum];
+    const missing = expectedParts.filter(p => !scanned.has(p));
+    const present = expectedParts.filter(p =>  scanned.has(p));
+    const extra   = [...scanned].filter(p => !expectedParts.includes(p));
+    const pass    = missing.length === 0;
+    if(pass) passKits++; else { failKits++; totalMissing += missing.length; }
+
+    // Kit header
+    html.push(`<div class="kit-block"><div class="kit-hdr">
+      <span style="font-size:16px;color:${pass?'#00e676':'#ff1744'}">${pass?'✓':'✗'}</span>
+      <span class="kit-num">KIT ${kitNum}</span>
+      <span class="${pass?'kit-pass':'kit-fail'}">
+        ${pass ? `PASS — all ${present.length} parts present`
+               : `FAIL — ${missing.length} missing, ${present.length} / ${expectedParts.length} present`}
+      </span>
+    </div>`);
+
+    // Missing parts first
+    missing.forEach(rfid=>{
+      const info = bomData.find(p=>p.rfid===rfid)||{};
+      html.push(`<div class="part-row row-miss">
+        <div>✗</div>
+        <div>${rfid}</div>
+        <div>${info.description||info.partNumber||''}</div>
+        <div><span class="badge b-miss">MISSING</span></div>
+      </div>`);
+    });
+
+    // Present parts
+    present.forEach(rfid=>{
+      const info = bomData.find(p=>p.rfid===rfid)||{};
+      html.push(`<div class="part-row row-ok">
+        <div class="st">✓</div>
+        <div>${rfid}</div>
+        <div>${info.description||info.partNumber||''}</div>
+        <div><span class="badge b-ok">OK</span></div>
+      </div>`);
+    });
+
+    // Extra parts
+    extra.forEach(rfid=>{
+      html.push(`<div class="part-row row-extra">
+        <div>?</div>
+        <div>${rfid}</div>
+        <div>Not in BOM</div>
+        <div><span class="badge b-ext">EXTRA</span></div>
+      </div>`);
+    });
+
+    html.push(`</div>`); // close kit-block
+  });
+
+  // Update in-GUI summary panel — keep it minimal, full report is in the new tab
+  document.getElementById('bom-summary').innerHTML=`
+    <div class="ws-item"><div class="ws-label">Kits Checked</div><div class="ws-val info">${totalKits}</div></div>
+    <div class="ws-item"><div class="ws-label">Passed</div><div class="ws-val ok">${passKits}</div></div>
+    <div class="ws-item"><div class="ws-label">Failed</div><div class="ws-val ${failKits>0?'err':'skip'}">${failKits}</div></div>
+    <div class="ws-item"><div class="ws-label">Missing Parts</div><div class="ws-val ${totalMissing>0?'err':'skip'}">${totalMissing}</div></div>
+    <div class="ws-item"><div class="ws-label">Expected / Kit</div><div class="ws-val info">${expectedParts.length}</div></div>
+    <div class="ws-item" style="margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px;align-self:center;">Full report opened in new tab</div>`;
+  document.getElementById('bom-table-wrap').innerHTML = '';
+  document.getElementById('bom-panel').className = 'bom-panel visible';
+
+  log(failKits>0
+    ? `BOM check: ${failKits} kit(s) FAILED — ${totalMissing} missing part(s) total`
+    : `BOM check: all ${passKits} kit(s) PASSED`,
+    failKits>0?'err':'ok');
+
+  // Build structured results data to pass into the new tab
+  const resultsData = {
+    generated: new Date().toLocaleString(),
+    totalKits, passKits, failKits, totalMissing,
+    expectedCount: expectedParts.length,
+    // Master part list: for each BOM part, which kits have it, which are missing
+    masterList: bomData.map(p=>{
+      const presentIn = kitNumbers.filter(k => kits[k] && kits[k].has(p.rfid));
+      const missingIn = kitNumbers.filter(k => kits[k] && !kits[k].has(p.rfid));
+      return {
+        rfid: p.rfid,
+        description: p.description || p.partNumber || '',
+        qty: p.qty,
+        presentCount: presentIn.length,
+        missingCount: missingIn.length,
+        missingKits: missingIn.join(', ')
+      };
+    }),
+    // Per-kit data
+    kitsData: kitNumbers.map(kitNum=>{
+      const scanned = kits[kitNum];
+      const missing = expectedParts.filter(p => !scanned.has(p));
+      const present = expectedParts.filter(p =>  scanned.has(p));
+      const extra   = [...scanned].filter(p => !expectedParts.includes(p));
+      return {
+        kitNum,
+        pass: missing.length === 0,
+        missing: missing.map(rfid=>{ const i=bomData.find(p=>p.rfid===rfid)||{}; return {rfid, description: i.description||i.partNumber||''}; }),
+        present: present.map(rfid=>{ const i=bomData.find(p=>p.rfid===rfid)||{}; return {rfid, description: i.description||i.partNumber||''}; }),
+        extra:   extra.map(rfid=>({ rfid, description:'Not in BOM' }))
+      };
+    })
+  };
+
+  const newTab = window.open('','_blank');
+  if(!newTab){ log('Popup blocked — allow popups for this page','err'); return; }
+
+  // Build the new tab HTML using string concat to avoid nested backtick issues
+  const dt = new Date().toLocaleString();
+  const dtShort = new Date().toLocaleDateString();
+
+  // Master list rows HTML
+  const masterRowsHtml = resultsData.masterList.map(function(r){
+    var cls = r.missingCount>0 ? 'has-miss' : '';
+    var missCls = r.missingCount>0 ? 'col-miss' : 'col-none';
+    var missVal = r.missingCount>0 ? r.missingCount : '&mdash;';
+    var kits = r.missingKits || '&mdash;';
+    return '<tr class="'+cls+'"><td class="col-rfid">'+r.rfid+'</td><td>'+r.description+'</td>'
+      +'<td class="col-ok">'+r.presentCount+'</td>'
+      +'<td class="'+missCls+'">'+missVal+'</td>'
+      +'<td class="col-kits">'+kits+'</td></tr>';
+  }).join('');
+
+  // Kit-by-kit HTML (all kits)
+  function kitBlockHtml(kit){
+    var pass = kit.pass;
+    var icon = pass ? '&#10003;' : '&#10007;';
+    var iconColor = pass ? '#00e676' : '#ff1744';
+    var statusCls = pass ? 'kit-pass' : 'kit-fail';
+    var statusTxt = pass
+      ? 'PASS &mdash; all '+kit.present.length+' parts present'
+      : 'FAIL &mdash; '+kit.missing.length+' missing, '+kit.present.length+' / '+resultsData.expectedCount+' present';
+    var rows = '';
+    kit.missing.forEach(function(p){
+      rows += '<div class="part-row row-miss"><div>&#10007;</div><div>'+p.rfid+'</div>'
+            + '<div>'+p.description+'</div><div><span class="badge b-miss">MISSING</span></div></div>';
+    });
+    kit.present.forEach(function(p){
+      rows += '<div class="part-row row-ok"><div class="st">&#10003;</div><div>'+p.rfid+'</div>'
+            + '<div>'+p.description+'</div><div><span class="badge b-ok">OK</span></div></div>';
+    });
+    kit.extra.forEach(function(p){
+      rows += '<div class="part-row row-extra"><div>?</div><div>'+p.rfid+'</div>'
+            + '<div>Not in BOM</div><div><span class="badge b-ext">EXTRA</span></div></div>';
+    });
+    return '<div class="kit-block"><div class="kit-hdr">'
+      + '<span style="color:'+iconColor+';font-size:16px;">'+icon+'</span>'
+      + '<span class="kit-num">KIT '+kit.kitNum+'</span>'
+      + '<span class="'+statusCls+'">'+statusTxt+'</span>'
+      + '</div>'+rows+'</div>';
+  }
+
+  const allKitsHtml     = resultsData.kitsData.map(kitBlockHtml).join('');
+  const failingKitsHtml = resultsData.kitsData.filter(function(k){return !k.pass;}).map(kitBlockHtml).join('');
+  const failBadge = failKits>0
+    ? '<span style="background:#ff1744;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 6px;margin-left:6px;vertical-align:middle;">'+failKits+'</span>'
+    : '';
+
+  const tabHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    + '<title>BOM Check Results &mdash; '+dtShort+'</title>'
+    + '<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>'
+    + '<style>'
+    + '@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;600;700&display=swap");'
+    + '*{box-sizing:border-box;margin:0;padding:0;}'
+    + 'body{background:#0d0f14;color:#c8d0e0;font-family:Barlow,sans-serif;font-size:13px;}'
+    + '.page-header{padding:28px 32px 0;margin-bottom:20px;}'
+    + 'h1{font-family:"Share Tech Mono",monospace;color:#00e5ff;letter-spacing:4px;font-size:20px;margin-bottom:6px;}'
+    + '.subtitle{color:#4a5068;font-family:"Share Tech Mono",monospace;font-size:11px;letter-spacing:2px;margin-bottom:20px;}'
+    + '.btn-bar{position:fixed;top:20px;right:20px;display:flex;gap:10px;z-index:100;}'
+    + '.btn{border:none;border-radius:4px;cursor:pointer;font-family:Barlow,sans-serif;font-weight:700;font-size:12px;letter-spacing:1px;padding:9px 16px;text-transform:uppercase;}'
+    + '.btn-print{background:#00e5ff;color:#000;}.btn-print:hover{filter:brightness(1.15);}'
+    + '.btn-xlsx{background:#ff6b35;color:#fff;}.btn-xlsx:hover{filter:brightness(1.15);}'
+    + '.summary{display:flex;gap:28px;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;padding:0 32px;}'
+    + '.sm-item .lbl{font-size:10px;letter-spacing:2px;color:#4a5068;text-transform:uppercase;margin-bottom:4px;}'
+    + '.sm-item .val{font-size:32px;font-weight:700;}'
+    + '.c-cyan{color:#00e5ff;}.c-ok{color:#00e676;}.c-err{color:#ff1744;}.c-muted{color:#4a5068;}'
+    + '.tab-bar{display:flex;gap:0;border-bottom:2px solid #1f2330;padding:0 32px;margin-bottom:0;}'
+    + '.tab{background:none;border:none;border-bottom:2px solid transparent;color:#4a5068;cursor:pointer;font-family:"Share Tech Mono",monospace;font-size:11px;letter-spacing:2px;margin-bottom:-2px;padding:10px 20px;text-transform:uppercase;transition:all .15s;}'
+    + '.tab:hover{color:#c8d0e0;}.tab.active{border-bottom-color:#00e5ff;color:#00e5ff;}'
+    + '.tab-content{display:none;padding:20px 32px;}.tab-content.active{display:block;}'
+    + '.master-tbl{width:100%;border-collapse:collapse;font-family:"Share Tech Mono",monospace;font-size:12px;}'
+    + '.master-tbl th{background:#13161e;border-bottom:1px solid #1f2330;color:#4a5068;font-size:10px;letter-spacing:2px;padding:9px 12px;text-align:left;text-transform:uppercase;position:sticky;top:0;}'
+    + '.master-tbl td{padding:7px 12px;border-bottom:1px solid #1f2330;}'
+    + '.master-tbl tr:hover td{background:#13161e;}'
+    + '.master-tbl tr.has-miss td{background:rgba(255,23,68,.04);}'
+    + '.col-rfid{color:#00e5ff;font-weight:700;}.col-ok{color:#00e676;text-align:center;font-weight:700;}'
+    + '.col-miss{color:#ff1744;text-align:center;font-weight:700;}.col-none{color:#4a5068;text-align:center;}.col-kits{color:#4a5068;font-size:11px;}'
+    + '.kit-block{margin-bottom:20px;border:1px solid #1f2330;border-radius:6px;overflow:hidden;}'
+    + '.kit-hdr{display:flex;align-items:center;gap:16px;padding:10px 16px;background:#13161e;border-bottom:1px solid #1f2330;}'
+    + '.kit-num{font-family:"Share Tech Mono",monospace;font-size:14px;font-weight:700;}'
+    + '.kit-pass{color:#00e676;font-size:12px;}.kit-fail{color:#ff1744;font-size:12px;}'
+    + '.part-row{display:grid;grid-template-columns:32px 70px 1fr 90px;border-bottom:1px solid #1f2330;font-family:"Share Tech Mono",monospace;font-size:12px;}'
+    + '.part-row:last-child{border-bottom:none;}.part-row>div{padding:7px 12px;}'
+    + '.row-miss{background:rgba(255,23,68,.06);color:#ff1744;}'
+    + '.row-ok{color:#4a5068;}.row-ok .st{color:#00e676;}.row-extra{color:#ffea00;}'
+    + '.badge{border-radius:3px;font-size:10px;font-weight:700;padding:2px 6px;letter-spacing:1px;}'
+    + '.b-miss{background:rgba(255,23,68,.15);color:#ff1744;}'
+    + '.b-ok{background:rgba(0,230,118,.12);color:#00e676;}'
+    + '.b-ext{background:rgba(255,234,0,.12);color:#ffea00;}'
+    + '@media print{.btn-bar,.tab-bar{display:none;}body{background:#fff;color:#000;}'
+    + '.tab-content{display:block!important;}.kit-hdr{background:#f5f5f5;}'
+    + '.part-row{color:#333;}.row-miss{background:#ffe8e8;color:#c00;}.kit-block{border-color:#ccc;}'
+    + '.master-tbl th{background:#f5f5f5;color:#333;}.col-rfid{color:#000;}.col-ok{color:#080;}.col-miss{color:#c00;}}'
+    + '</style></head><body>'
+    + '<div class="btn-bar">'
+    + '<button class="btn btn-xlsx" onclick="exportXLSX()">&#11015; Export XLSX</button>'
+    + '<button class="btn btn-print" onclick="window.print()">&#128424; Print</button>'
+    + '</div>'
+    + '<div class="page-header"><h1>BOM VERIFICATION REPORT</h1>'
+    + '<div class="subtitle">'+dt+' &nbsp;|&nbsp; '+totalKits+' KITS &nbsp;|&nbsp; '+expectedParts.length+' PARTS EXPECTED</div></div>'
+    + '<div class="summary">'
+    + '<div class="sm-item"><div class="lbl">Kits Checked</div><div class="val c-cyan">'+totalKits+'</div></div>'
+    + '<div class="sm-item"><div class="lbl">Passed</div><div class="val c-ok">'+passKits+'</div></div>'
+    + '<div class="sm-item"><div class="lbl">Failed</div><div class="val '+(failKits>0?'c-err':'c-muted')+'">'+failKits+'</div></div>'
+    + '<div class="sm-item"><div class="lbl">Missing Parts</div><div class="val '+(totalMissing>0?'c-err':'c-muted')+'">'+totalMissing+'</div></div>'
+    + '<div class="sm-item"><div class="lbl">Expected / Kit</div><div class="val c-cyan">'+expectedParts.length+'</div></div>'
+    + '</div>'
+    + '<div class="tab-bar">'
+    + '<button class="tab active" onclick="switchTab(\'master\',this)">Master Parts List</button>'
+    + '<button class="tab" onclick="switchTab(\'kits\',this)">Kit by Kit</button>'
+    + '<button class="tab" onclick="switchTab(\'failing\',this)">Failing Kits '+failBadge+'</button>'
+    + '</div>'
+    + '<div class="tab-content active" id="tab-master">'
+    + '<table class="master-tbl"><thead><tr>'
+    + '<th>Part #</th><th>Description</th>'
+    + '<th style="text-align:center">Present</th>'
+    + '<th style="text-align:center">Missing</th>'
+    + '<th>Missing From Kits</th>'
+    + '</tr></thead><tbody>'+masterRowsHtml+'</tbody></table>'
+    + '</div>'
+    + '<div class="tab-content" id="tab-kits">'+allKitsHtml+'</div>'
+    + '<div class="tab-content" id="tab-failing" data-built="0"></div>'
+    + '<script>'
+    + 'var RESULTS='+JSON.stringify(resultsData)+';'
+    + 'var FAILING_HTML='+JSON.stringify(failingKitsHtml)+';'
+    + 'function switchTab(name,btn){'
+    + '  document.querySelectorAll(".tab-content").forEach(function(el){el.classList.remove("active");});'
+    + '  document.querySelectorAll(".tab").forEach(function(el){el.classList.remove("active");});'
+    + '  document.getElementById("tab-"+name).classList.add("active");'
+    + '  btn.classList.add("active");'
+    + '  if(name==="failing"){'
+    + '    var el=document.getElementById("tab-failing");'
+    + '    if(el.dataset.built==="1") return;'
+    + '    el.dataset.built="1";'
+    + '    el.innerHTML=FAILING_HTML||\'<div style="text-align:center;padding:60px;color:#00e676;font-family:monospace;font-size:16px;">&#10003; All kits passed</div>\';'
+    + '  }'
+    + '}'
+    + 'function exportXLSX(){'
+    + '  var wb=XLSX.utils.book_new();'
+    + '  var mRows=[["Part #","Description","Expected in Each Kit","Present in Kits","Missing from Kits","Kits Missing From"]];'
+    + '  RESULTS.masterList.forEach(function(p){mRows.push([p.rfid,p.description,RESULTS.totalKits,p.presentCount,p.missingCount,p.missingKits]);});'
+    + '  var mWS=XLSX.utils.aoa_to_sheet(mRows);'
+    + '  mWS["!cols"]=[{wch:10},{wch:55},{wch:22},{wch:18},{wch:18},{wch:40}];'
+    + '  for(var c=0;c<=5;c++){var a=XLSX.utils.encode_cell({r:0,c:c});if(mWS[a])mWS[a].s={font:{bold:true,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1F2330"}},alignment:{horizontal:"center"}};}'
+    + '  for(var r=1;r<=RESULTS.masterList.length;r++){if(RESULTS.masterList[r-1].missingCount>0){for(var c=0;c<=5;c++){var a=XLSX.utils.encode_cell({r:r,c:c});if(mWS[a])mWS[a].s={fill:{fgColor:{rgb:"FFF8F8"}}};}}}'
+    + '  XLSX.utils.book_append_sheet(wb,mWS,"Master Parts List");'
+    + '  RESULTS.kitsData.forEach(function(kit){'
+    + '    var rows=[["Status","Part #","Description","Notes"]];'
+    + '    kit.missing.forEach(function(p){rows.push(["MISSING",p.rfid,p.description,"Needs to be located or reordered"]);});'
+    + '    kit.present.forEach(function(p){rows.push(["PRESENT",p.rfid,p.description,""]);});'
+    + '    kit.extra.forEach(function(p){rows.push(["EXTRA",p.rfid,p.description,"Not in BOM - verify"]);});'
+    + '    var ws=XLSX.utils.aoa_to_sheet(rows);'
+    + '    ws["!cols"]=[{wch:10},{wch:10},{wch:55},{wch:40}];'
+    + '    for(var c=0;c<=3;c++){var a=XLSX.utils.encode_cell({r:0,c:c});if(ws[a])ws[a].s={font:{bold:true,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1F2330"}},alignment:{horizontal:"center"}};}'
+    + '    for(var r=1;r<rows.length;r++){var s=rows[r][0];var col=s==="MISSING"?"FFECEC":s==="EXTRA"?"FFFDE8":"F0FFF4";for(var c=0;c<=3;c++){var a=XLSX.utils.encode_cell({r:r,c:c});if(ws[a])ws[a].s={fill:{fgColor:{rgb:col}}};}'
+    + '    var sa=XLSX.utils.encode_cell({r:r,c:0});if(ws[sa])ws[sa].s={font:{bold:true},fill:{fgColor:{rgb:col}}};}'
+    + '    XLSX.utils.book_append_sheet(wb,ws,"Kit "+kit.kitNum);'
+    + '  });'
+    + '  XLSX.writeFile(wb,"bom_check_"+new Date().toISOString().slice(0,10)+".xlsx");'
+    + '}'
+    + '<\/script></body></html>';
+
+  newTab.document.write(tabHtml);
+  newTab.document.close();
+
+  window.dispatchEvent(new Event('resize'));
+}
+
+// ── CSV Import ──
+function doImportCSV(){
+  // Reset the input so the same file can be re-imported if needed
+  const input = document.getElementById('csv-file-input');
+  input.value = '';
+  input.click();
+}
+
+function handleCSVFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    // Normalise line endings, strip BOM
+    const text = e.target.result
+      .replace(/^\uFEFF/,'')       // BOM
+      .replace(/\r\n/g,'\n')       // CRLF → LF
+      .replace(/\r/g,'\n');        // CR → LF
+
+    const lines = text.split('\n').filter(l=>l.trim());
+    if(!lines.length){ log('CSV file is empty','err'); return; }
+
+    // Robust CSV field splitter — handles quoted fields and escaped quotes
+    function splitCSV(line){
+      const fields = [];
+      let cur = '', inQ = false;
+      for(let i=0; i<line.length; i++){
+        const ch = line[i];
+        if(ch==='"'){
+          if(inQ && line[i+1]==='"'){ cur+='"'; i++; }  // escaped ""
+          else inQ = !inQ;
+        } else if(ch===',' && !inQ){
+          fields.push(cur); cur='';
+        } else {
+          cur += ch;
+        }
+      }
+      fields.push(cur);
+      return fields.map(f=>f.trim());
+    }
+
+    // Parse header
+    const header = splitCSV(lines[0]).map(h=>h.toLowerCase());
+    const col = name => header.findIndex(h=>h.includes(name));
+
+    const kitCol   = col('kit');
+    const partCol  = col('part');
+    const epcCol   = col('epc');
+    const rssiCol  = col('rssi');
+    const countCol = col('read') !== -1 ? col('read') : col('count');
+
+    if(epcCol === -1){
+      log('CSV missing EPC column — is this an RFID Kit Manager export?','err');
+      return;
+    }
+
+    let imported = 0, skipped = 0;
+
+    lines.slice(1).forEach(line=>{
+      if(!line.trim()) return;
+      const fields = splitCSV(line);
+      const get = i => (i>=0 && i<fields.length) ? fields[i] : '';
+
+      const epc     = get(epcCol);
+      const kitRaw  = get(kitCol);
+      const partRaw = get(partCol);
+      const rssi    = parseInt(get(rssiCol))  || 0;
+      const count   = parseInt(get(countCol)) || 1;
+
+      // EPC must be a 24-char hex string
+      if(!epc || !/^[0-9A-Fa-f]{24}$/.test(epc)){ skipped++; return; }
+
+      const kitNum  = kitRaw  ? parseInt(kitRaw,10)  : 65535;
+      const partNum = partRaw ? parseInt(partRaw,10) : 65535;
+      const programmed = partNum>0 && partNum!==65535 && kitNum>0 && kitNum!==65535;
+
+      if(tagStore[epc]){
+        const ex = tagStore[epc];
+        if(programmed) ex.programmed = true;
+        if(partNum>0 && partNum!==65535) ex.part = partNum;
+        if(kitNum >0 && kitNum !==65535) ex.kit  = kitNum;
+        if(rssi > ex.rssi) ex.rssi = rssi;
+        ex.count += count;
+      } else {
+        tagStore[epc] = { epc, part:partNum, kit:kitNum,
+                          rssi, programmed, bad:false, count };
+      }
+      imported++;
+    });
+
+    renderTable();
+    log(`Imported ${imported} tag(s) from "${file.name}"${skipped?` (${skipped} skipped)`:''}`, 'ok');
+    if(imported>0) log('Run Check BOM to verify kits against the BOM','info');
+  };
+
+  reader.onerror = ()=>log('Failed to read file','err');
+  reader.readAsText(file);
+}
+
+// ── Status polling ──
+async function pollStatus(){
+  if(busy) return;
+  try{
+    const r=await fetchWithTimeout(`${API}/status`,{},4000);
+    const d=await r.json();
+    if(!busy){
+      setTemp(d.temperature);
+      setStatus(d.message,d.connected,false);
+    }
+  } catch(e){
+    if(!busy&&connected) setStatus('Server offline',false,false);
+  }
+}
+
+// ── Drag handles ──
+(function(){
+  const right = document.querySelector('.right');
+  const tagPanel   = document.querySelector('.tag-panel');
+  const writePanel = document.getElementById('write-panel');
+  const bomPanel   = document.getElementById('bom-panel');
+  const logPanel   = document.querySelector('.log-panel');
+  const dh1 = document.getElementById('dh1');
+  const dh2 = document.getElementById('dh2');
+  const dh3 = document.getElementById('dh3');
+
+  let tagH=0, writeH=0, bomH=0, logH=0;
+  const HANDLE_H = 5;
+  const MIN_H = 40;
+
+  function countVisibleHandles(){
+    // dh1 always visible; dh2 between write and bom; dh3 between bom and log
+    return 3; // always 3 handles in DOM
+  }
+
+  function initHeights(){
+    const total = right.clientHeight;
+    const handles = 3 * HANDLE_H;
+    const avail = total - handles;
+    writeH = writePanel.classList.contains('visible') ? 160 : 0;
+    bomH   = bomPanel.classList.contains('visible')   ? 160 : 0;
+    logH   = 150;
+    tagH   = avail - writeH - bomH - logH;
+    if(tagH < MIN_H) tagH = MIN_H;
+    applyHeights();
+  }
+
+  function applyHeights(){
+    tagPanel.style.height   = tagH   + 'px';
+    writePanel.style.height = writeH + 'px';
+    bomPanel.style.height   = bomH   + 'px';
+    logPanel.style.height   = logH   + 'px';
+  }
+
+  // Hook renderWriteResults to rebalance when write panel appears
+  const origRender = window.renderWriteResults;
+  window.renderWriteResults = function(rawLog, label){
+    origRender(rawLog, label);
+    requestAnimationFrame(()=>{
+      if(writeH === 0){
+        const total = right.clientHeight - 3*HANDLE_H;
+        writeH = 160;
+        tagH = total - writeH - bomH - logH;
+        if(tagH < MIN_H) tagH = MIN_H;
+        applyHeights();
+      }
+    });
+  };
+
+  // Hook doBomCheck to rebalance when bom panel appears
+  const origBomCheck = window.doBomCheck;
+  window.doBomCheck = async function(){
+    await origBomCheck();
+    requestAnimationFrame(()=>{
+      if(bomH === 0 && document.getElementById('bom-panel').classList.contains('visible')){
+        const total = right.clientHeight - 3*HANDLE_H;
+        bomH = 160;
+        tagH = total - writeH - bomH - logH;
+        if(tagH < MIN_H) tagH = MIN_H;
+        applyHeights();
+      }
+    });
+  };
+
+  function makeDragger(handle, getHA, getHB, setHA, setHB){
+    let startY, startHA, startHB;
+    handle.addEventListener('mousedown', e=>{
+      startY=e.clientY; startHA=getHA(); startHB=getHB();
+      handle.classList.add('dragging');
+      document.body.style.cursor='ns-resize';
+      document.body.style.userSelect='none';
+      function onMove(e){
+        const d=e.clientY-startY;
+        let a=startHA+d, b=startHB-d;
+        if(a<MIN_H){b+=a-MIN_H;a=MIN_H;}
+        if(b<MIN_H){a+=b-MIN_H;b=MIN_H;}
+        setHA(a); setHB(b); applyHeights();
+      }
+      function onUp(){
+        handle.classList.remove('dragging');
+        document.body.style.cursor='';
+        document.body.style.userSelect='';
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+      e.preventDefault();
+    });
+  }
+
+  makeDragger(dh1, ()=>tagH,   ()=>writeH, v=>tagH=v,   v=>writeH=v);
+  makeDragger(dh2, ()=>writeH, ()=>bomH,   v=>writeH=v, v=>bomH=v);
+  makeDragger(dh3, ()=>bomH,   ()=>logH,   v=>bomH=v,   v=>logH=v);
+
+  window.addEventListener('load',   initHeights);
+  window.addEventListener('resize', initHeights);
+  setTimeout(initHeights, 50);
+})();
+
+// Init
+setInterval(pollStatus,5000);
+setSort('part');
+updPwr();
+log('Ready. Run bin\\rfid_server.exe if not already running.','dim');
+</script>
+</body>
+</html>
