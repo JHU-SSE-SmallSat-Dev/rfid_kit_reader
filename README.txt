@@ -494,6 +494,99 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
 
 
 ================================================================================
+  CONNECTING THE READER
+================================================================================
+
+  The SparkFun Simultaneous RFID Reader - M7E Hecto has two ways to connect
+  to a computer. Choose one based on your power needs.
+
+
+  OPTION 1 - USB-C DIRECT (easiest, recommended for most use)
+  ------------------------------------------------------------
+  The board has a built-in USB-C connector with a CH340C USB-to-serial
+  converter. A single USB-C cable handles both power and serial communication.
+
+  What you need:
+    - USB-C to USB-C cable  OR  USB-A to USB-C cable
+    - A USB port or charger that can supply at least 500mA
+
+  Steps:
+    1. Plug the USB-C cable into the board.
+    2. Plug the other end into your computer or a USB power adapter.
+    3. Set the UART switch on the board to USB (away from the PTH header).
+    4. Windows will install the CH340C driver automatically. If it does not,
+       download from: https://www.wch-ic.com/downloads/CH341SER_EXE.html
+    5. Open Device Manager > Ports (COM & LPT) to find the COM port.
+       It will appear as "USB-SERIAL CH340 (COMx)".
+    6. Enter that COM port in the GUI and click Connect.
+
+  Power note:
+    Standard laptop USB ports supply ~500mA at 5V. This is enough for power
+    levels up to about 20-22 dBm. Above that, the reader may brown out mid-scan
+    or mid-write. See Option 2 for reliable high-power operation.
+
+
+  OPTION 2 - USB-C FROM A CHARGER + PTH SERIAL (recommended for full power)
+  --------------------------------------------------------------------------
+  For reliable operation at full power (27 dBm / 2700 cdBm), the reader needs
+  more current than a typical laptop USB port can supply. The solution is to
+  power the board from a dedicated USB charger via the USB-C port while
+  communicating over the PTH serial header with a separate USB-UART adapter.
+
+  What you need:
+    - USB-C to USB-C cable connected to a USB wall charger or powered hub
+      that can supply 5V at 1A or more (e.g. a phone charger or MacBook
+      charger using a USB-C to USB-C cable from a Thunderbolt/USB4 port)
+    - A 3.3V USB-UART adapter (e.g. SparkFun Serial Basic, FTDI cable)
+    - Jumper wires to connect the PTH header
+
+  Steps:
+    1. Set the UART switch on the board to SER (toward the PTH header).
+    2. Connect the USB-C power cable from a wall charger to the board.
+       Using a USB-C to USB-C cable from a laptop Thunderbolt or USB4 port
+       (Lightning port on Mac) is a convenient option as these ports can
+       typically supply 1A or more, providing clean stable power.
+    3. Wire the PTH header to your USB-UART adapter:
+         Board TX  -->  Adapter RX
+         Board RX  -->  Adapter TX
+         Board GND -->  Adapter GND
+       Do NOT connect 3.3V or 5V from the adapter — power comes from USB-C.
+    4. Plug the USB-UART adapter into your computer.
+    5. Find the COM port in Device Manager > Ports (COM & LPT).
+    6. Enter that COM port in the GUI and click Connect.
+
+  Why this matters:
+    The reader draws up to 720mA at 5V at maximum read/write power. Most
+    laptop USB-A ports are limited to 500mA. When the reader tries to ramp
+    up RF power during a scan, the voltage sags and the reader either resets,
+    drops the serial connection, or produces unreliable reads and writes.
+    A dedicated charger with a USB-C to USB-C cable eliminates this entirely.
+
+
+  UART SWITCH
+  -----------
+  There is a 2-position switch on the board labeled UART.
+
+    USB position  -->  USB-C connector active (Option 1)
+    SER position  -->  PTH serial header active (Option 2)
+
+  The switch must match your connection method or the reader will not
+  communicate. This is a common source of connection failures.
+
+
+  DRIVER INSTALLATION (Windows)
+  ------------------------------
+  The CH340C chip requires a driver on Windows. Most modern Windows installs
+  will find and install it automatically via Windows Update when the board
+  is first plugged in. If the COM port does not appear in Device Manager:
+
+    1. Download the driver from: https://www.wch-ic.com/downloads/CH341SER_EXE.html
+    2. Run the installer and click Install.
+    3. Unplug and re-plug the USB cable.
+    4. The port should now appear as USB-SERIAL CH340 (COMx).
+
+
+================================================================================
   HARDWARE NOTES
 ================================================================================
 

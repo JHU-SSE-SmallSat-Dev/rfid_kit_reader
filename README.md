@@ -373,6 +373,85 @@ Tag may be defective or read-only. Try closer range with higher power. Some chea
 
 ---
 
+## Connecting the Reader
+
+The SparkFun M7E Hecto has two ways to connect to a computer. Choose based on your power needs.
+
+### Option 1 — USB-C Direct (easiest, recommended for most use)
+
+The board has a built-in USB-C connector with a CH340C USB-to-serial converter. A single cable handles both power and serial communication.
+
+**What you need:**
+- USB-C to USB-C cable (or USB-A to USB-C)
+- A USB port or charger that supplies at least 500mA
+
+**Steps:**
+1. Plug the USB-C cable into the board
+2. Plug the other end into your computer or USB charger
+3. Set the **UART switch** on the board to **USB** (away from the PTH header)
+4. Windows will install the CH340C driver automatically. If it doesn't, download from: https://www.wch-ic.com/downloads/CH341SER_EXE.html
+5. Open **Device Manager → Ports (COM & LPT)** — it will appear as `USB-SERIAL CH340 (COMx)`
+6. Enter that COM port in the GUI and click Connect
+
+> **Power note:** Standard laptop USB ports supply ~500mA at 5V, which supports power levels up to about 20–22 dBm. Above that the reader may brown out mid-scan. See Option 2 for reliable high-power operation.
+
+---
+
+### Option 2 — USB-C from a Charger + PTH Serial (recommended for full power)
+
+For reliable operation at full power (27 dBm / 2700 cdBm), the reader needs more current than a typical laptop USB port can supply. Power the board from a dedicated charger via USB-C and communicate separately over the PTH serial header.
+
+**What you need:**
+- USB-C to USB-C cable connected to a USB wall charger or powered hub supplying **5V at 1A or more**
+  - A USB-C to USB-C cable from a laptop Thunderbolt / USB4 / Lightning port works well — these ports can typically supply 1A or more, providing clean stable power
+- A 3.3V USB-UART adapter (e.g. SparkFun Serial Basic, FTDI cable)
+- Jumper wires
+
+**Steps:**
+1. Set the **UART switch** on the board to **SER** (toward the PTH header)
+2. Connect the USB-C power cable from a wall charger to the board
+3. Wire the PTH header to your USB-UART adapter:
+
+   | Board | Adapter |
+   |---|---|
+   | TX | RX |
+   | RX | TX |
+   | GND | GND |
+
+   Do **not** connect 3.3V or 5V from the adapter — power comes from the USB-C charger only.
+
+4. Plug the USB-UART adapter into your computer
+5. Find the COM port in **Device Manager → Ports (COM & LPT)**
+6. Enter that COM port in the GUI and click Connect
+
+> **Why this matters:** The reader draws up to 720mA at 5V at maximum RF power. Most laptop USB-A ports are limited to ~500mA. When the reader ramps up RF power during a scan, the voltage sags and the reader resets, drops the serial connection, or produces unreliable reads and writes. A dedicated charger via USB-C eliminates this entirely.
+
+---
+
+### UART Switch
+
+There is a 2-position switch on the board labeled **UART**:
+
+| Position | Active interface |
+|---|---|
+| USB | USB-C connector (Option 1) |
+| SER | PTH serial header (Option 2) |
+
+The switch **must match your connection method** or the reader will not communicate. This is a common source of connection failures.
+
+---
+
+### CH340C Driver (Windows)
+
+The CH340C chip requires a driver. Most modern Windows installs will find and install it automatically via Windows Update. If the COM port does not appear in Device Manager:
+
+1. Download from: **https://www.wch-ic.com/downloads/CH341SER_EXE.html**
+2. Run the installer and click Install
+3. Unplug and re-plug the USB cable
+4. The port will appear as `USB-SERIAL CH340 (COMx)`
+
+---
+
 ## Hardware Notes
 
 | Topic | Detail |
