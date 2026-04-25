@@ -9,7 +9,7 @@ The intended use case is kit management: each physical hardware component is tag
 ## Dependencies
 
 **Required to build** (compile the C source code):
-- **MinGW-w64 GCC** — [winlibs.com](https://winlibs.com/), GCC 15.x recommended
+- **MinGW** — [sourceforge.net/projects/mingw](https://sourceforge.net/projects/mingw/) (includes GCC)
 - **MercuryAPI 1.37.2.24** C source — must be this exact version
 
 **Required to run** the GUI and command-line tools:
@@ -29,27 +29,34 @@ pip install pandas openpyxl
 
 ## Getting Started
 
-### Step 1 — Install MinGW-w64 (C Compiler)
+### Step 1 — Install MinGW (C Compiler)
 
 Required to compile the C source code.
 
-1. Go to **https://winlibs.com/**
-2. Download the latest GCC release. Select:
-   - Architecture: **x86_64**
-   - Threads: **Win32**
-   - Exception: **SEH**
-   - Runtime: **UCRT**
-3. Extract to a simple path — e.g. `C:\mingw64`
-4. Add GCC to your PATH:
+1. Go to **https://sourceforge.net/projects/mingw/**
+2. Click the green **Download** button to get `mingw-get-setup.exe`
+3. Run `mingw-get-setup.exe`:
+   - Click **Install**
+   - Leave the installation directory as the default: `C:\MinGW`
+   - Click **Continue** to download the package manager
+   - Click **Continue** again when done
+4. The **MinGW Installation Manager** will open. Right-click each of the following packages and select **Mark for Installation**:
+   - `mingw32-base` — GCC C compiler
+   - `mingw32-gcc-g++` — C++ compiler (needed for some API headers)
+   - `msys-base` — shell utilities
+5. Click **Installation → Apply Changes → Apply**
+6. Add MinGW to your PATH:
    - Open Start → search **Environment Variables**
    - Under **System variables**, select **Path** → **Edit**
-   - Click **New** and add `C:\mingw64\bin`
+   - Click **New** and add `C:\MinGW\bin`
    - Click OK on all dialogs
-5. Open a **new** Command Prompt and verify:
+7. Open a **new** Command Prompt and verify:
    ```
    gcc --version
    ```
-   Should print something like: `gcc (MinGW-w64 ...) 15.x.x`
+   Should print something like: `gcc (MinGW.org GCC...) x.x.x`
+
+> **Note:** If you see "gcc not found", make sure you opened a **new** Command Prompt after editing PATH, and that you added `C:\MinGW\bin` (not `C:\MinGW`).
 
 ---
 
@@ -343,7 +350,7 @@ Outputs: `test_short_*.csv` (3 kits × 4 parts) and `test_long_*.csv` (50 kits �
 ## Troubleshooting
 
 **"gcc not found" when building**
-GCC is not on your PATH. Redo Step 1, add `C:\mingw64\bin` to PATH, then open a new Command Prompt.
+GCC is not on your PATH. Redo Step 1, add `C:\MinGW\bin` (not `C:\MinGW`) to the PATH system variable, then open a new Command Prompt.
 
 **"Cannot find tm_reader.h" when building**
 MercuryAPI is missing or in the wrong folder. Check: `lib\mercuryapi-1.37.2.24\c\src\api\tm_reader.h`

@@ -17,7 +17,7 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
 ================================================================================
 
   Required to BUILD (compile the C source code):
-  - MinGW-w64 GCC (winlibs.com, GCC 15.x recommended)
+  - MinGW (sourceforge.net/projects/mingw, includes GCC)
   - MercuryAPI 1.37.2.24 C source (must be this exact version)
 
   Required to RUN the GUI and command-line tools:
@@ -38,30 +38,42 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
 ================================================================================
 
 --------------------------------------------------------------------------------
-  STEP 1 - Install MinGW-w64 (C compiler)
+  STEP 1 - Install MinGW (C compiler)
 --------------------------------------------------------------------------------
 
-  Required to compile the C source code. Use WinLibs MinGW-w64.
+  Required to compile the C source code.
 
-  1. Go to: https://winlibs.com/
-  2. Download the latest GCC release. Choose:
-       - Architecture: x86_64
-       - Threads:      Win32
-       - Exception:    SEH
-       - Runtime:      UCRT
-     Example filename: winlibs-x86_64-ucrt-...-gcc-15.x.x-...7z
+  1. Go to: https://sourceforge.net/projects/mingw/
+  2. Click the green "Download" button to get mingw-get-setup.exe.
 
-  3. Extract the archive to a simple path, e.g. C:\mingw64
+  3. Run mingw-get-setup.exe.
+       - Click Install
+       - Leave the installation directory as the default: C:\MinGW
+       - Click Continue to download and install the package manager.
+       - Click Continue again when done.
 
-  4. Add GCC to your PATH:
+  4. The MinGW Installation Manager will open. Mark the following packages
+     for installation by right-clicking each and selecting
+     "Mark for Installation":
+       - mingw32-base       (GCC C compiler)
+       - mingw32-gcc-g++    (C++ compiler, needed for some API headers)
+       - msys-base          (shell utilities used by make)
+
+  5. Click Installation > Apply Changes > Apply to download and install.
+
+  6. Add MinGW to your PATH:
        - Open Start, search "Environment Variables"
        - Under "System variables", select Path, click Edit
-       - Click New and add:  C:\mingw64\bin
+       - Click New and add:  C:\MinGW\bin
        - Click OK on all dialogs
 
-  5. Open a new Command Prompt and verify:
+  7. Open a NEW Command Prompt and verify:
        gcc --version
-     Should print something like: gcc (MinGW-w64 ...) 15.x.x
+     Should print something like: gcc (MinGW.org GCC...) x.x.x
+
+  Note: if you see "gcc not found" after setting the PATH, make sure you
+  opened a NEW Command Prompt after making the change, and double-check
+  that C:\MinGW\bin (not C:\MinGW) was added to Path.
 
 
 --------------------------------------------------------------------------------
@@ -628,8 +640,8 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
 
   "gcc not found" when building
     GCC is not on your PATH. Re-do Step 1, make sure to add
-    C:\mingw64\bin (or wherever you extracted MinGW) to the PATH
-    system variable, then open a NEW Command Prompt.
+    C:\MinGW\bin to the PATH system variable, then open a NEW
+    Command Prompt. Do not add C:\MinGW — it must be C:\MinGW\bin.
 
   "Cannot find tm_reader.h" when building
     MercuryAPI is missing or in the wrong folder. Re-do Step 3.
