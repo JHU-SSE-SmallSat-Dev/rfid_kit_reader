@@ -6,6 +6,27 @@ The intended use case is kit management: each physical hardware component is tag
 
 ---
 
+## Dependencies
+
+**Required to build** (compile the C source code):
+- **MinGW-w64 GCC** — [winlibs.com](https://winlibs.com/), GCC 15.x recommended
+- **MercuryAPI 1.37.2.24** C source — must be this exact version
+
+**Required to run** the GUI and command-line tools:
+- Any modern web browser (Chrome, Firefox, Edge)
+- SparkFun Simultaneous RFID Reader (M7E Hecto) + USB-UART serial adapter
+
+**Required to run the BOM checker** (optional feature):
+- **Python 3.10+** — [python.org](https://www.python.org/downloads/)
+- **pandas 1.3+** — `pip install pandas`
+- **openpyxl 3.0+** — `pip install openpyxl`
+
+```
+pip install pandas openpyxl
+```
+
+---
+
 ## Getting Started
 
 ### Step 1 — Install MinGW-w64 (C Compiler)
@@ -43,12 +64,25 @@ Required to read `BOM.xlsx` and power the BOM verification feature. Skip if you 
    ```
    python --version
    ```
-5. Install required packages:
+   Should print: `Python 3.x.x`
+
+5. Install required Python packages:
+
    ```
    pip install pandas openpyxl
    ```
-   - `pandas` — reads the BOM.xlsx file
-   - `openpyxl` — required by pandas to open .xlsx files
+
+   | Package | Min Version | Purpose |
+   |---|---|---|
+   | `pandas` | 1.3+ | Reads and parses `BOM.xlsx` into a structured table. Used by `bom_export.py` to extract part numbers, descriptions, quantities, and order links. |
+   | `openpyxl` | 3.0+ | Required by pandas to open `.xlsx` format Excel files. Without this, pandas cannot read `BOM.xlsx` at all. |
+
+   Verify both installed correctly:
+   ```
+   python -c "import pandas; import openpyxl; print('OK')"
+   ```
+
+   > **Note:** The BOM checker will show "BOM not found" or fail silently if either package is missing. If Python itself is not on PATH, the server will log an error when Check BOM is clicked.
 
 ---
 
@@ -323,8 +357,13 @@ Open Task Manager, find `rfid_server.exe`, and end it.
 **Connect fails with "Input/output error"**
 COM port is held by a previous process. Wait 2–3 seconds and try again.
 
-**BOM checker shows "BOM not found"**
-Ensure `files\BOM.xlsx` exists and Python + pandas are installed. Test with: `python bom_export.py files\BOM.xlsx`
+**BOM checker shows "BOM not found" or fails**
+Ensure `files\BOM.xlsx` exists and Python + both packages are installed:
+```
+python -c "import pandas; import openpyxl; print('OK')"
+python bom_export.py files\BOM.xlsx
+```
+If `import` fails, run `pip install pandas openpyxl`. If Python is not found at all, redo Step 2 and open a new Command Prompt after installing.
 
 **Tags not detected during scan**
 Check the reader power switch. Try higher power (2700 cdBm). Use an external 5V 1A supply. Hold tags within 0.5m of the onboard antenna.

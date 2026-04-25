@@ -78,6 +78,11 @@
   .btn-disconnect:hover:not(:disabled) { background:var(--err); color:#fff; }
   .btn-scan { background:var(--bg); border:1px solid var(--accent); color:var(--accent); }
   .btn-scan:hover:not(:disabled) { background:var(--accent); color:#000; }
+  .btn-scan-stop { background:var(--err); border:1px solid var(--err); color:#fff; }
+  .btn-scan-stop:hover:not(:disabled) { filter:brightness(1.15); }
+  .btn-continuous { background:transparent; border:1px solid var(--accent); color:var(--accent); font-size:11px; padding:7px 10px; }
+  .btn-continuous:hover:not(:disabled) { background:rgba(0,229,255,.1); }
+  .btn-continuous.running { border-color:var(--err); color:var(--err); background:rgba(255,23,68,.08); }
   .btn-write-part { background:var(--accent2); color:#fff; }
   .btn-write-part:hover:not(:disabled) { filter:brightness(1.15); }
   .btn-write-kit  { background:transparent; border:1px solid var(--accent2); color:var(--accent2); }
@@ -92,8 +97,6 @@
 
   /* Right — flex column so panels can be resized by drag handles */
   .right { display:flex; flex-direction:column; overflow:hidden; }
-
-  /* Tag panel */
   .tag-panel { overflow:auto; padding:16px 20px; display:flex; flex-direction:column; flex-shrink:0; }
 
   .tag-toolbar {
@@ -295,6 +298,10 @@
   <div>
     <div class="sec-label">Inventory</div>
     <button class="btn btn-scan" id="bs" onclick="doScan()" disabled>▶ Scan Tags</button>
+    <div style="margin-top:8px">
+      <button class="btn btn-continuous" id="bcs" onclick="toggleContinuous()" disabled>⟳ Continuous Scan</button>
+    </div>
+    <div id="continuous-status" style="display:none;font-family:var(--mono);font-size:10px;color:var(--accent);margin-top:6px;letter-spacing:1px;"></div>
     <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <button class="btn btn-csv" id="bcsv" onclick="doCSV()" disabled>↓ Export CSV</button>
       <button class="btn btn-import" onclick="doImportCSV()">↑ Import CSV</button>
@@ -377,18 +384,6 @@
 
   <div class="drag-handle" id="dh2"></div>
 
-  <!-- BOM Results Panel -->
-  <div class="bom-panel" id="bom-panel">
-    <div class="bom-hdr">
-      <span class="bom-hdr-label">BOM Verification Results</span>
-      <button class="btn-clr" onclick="document.getElementById('bom-panel').className='bom-panel'">CLEAR</button>
-    </div>
-    <div class="bom-summary" id="bom-summary"></div>
-    <div class="bom-table-wrap" id="bom-table-wrap"></div>
-  </div>
-
-  <div class="drag-handle" id="dh3"></div>
-
   <div class="log-panel">
     <div class="log-hdr">
       <span class="log-hdr-label">Operation Log</span>
@@ -403,6 +398,9 @@
 const API = 'http://localhost:8765';
 let connected = false;
 let busy      = false;
+let continuousRunning = false;
+let continuousStop    = false;
+let continuousCycles  = 0;
 
 // ── Persistent tag store: keyed by EPC ──
 let tagStore = {};  // { epc: {epc, part, kit, rssi, programmed, bad, count} }
@@ -431,9 +429,10 @@ function setStatus(msg,conn,isBusy){
   document.getElementById('sweep').className=isBusy?'sweep on':'sweep';
   document.getElementById('bc').disabled   = conn||isBusy;
   document.getElementById('bd').disabled   = !conn||isBusy;
-  document.getElementById('bs').disabled   = !conn||isBusy;
-  document.getElementById('bwp').disabled  = !conn||isBusy;
-  document.getElementById('bwk').disabled  = !conn||isBusy;
+  document.getElementById('bs').disabled   = !conn||isBusy||continuousRunning;
+  document.getElementById('bcs').disabled  = !conn;
+  document.getElementById('bwp').disabled  = !conn||isBusy||continuousRunning;
+  document.getElementById('bwk').disabled  = !conn||isBusy||continuousRunning;
   document.getElementById('bcsv').disabled = !conn||isBusy;
 }
 
@@ -689,6 +688,73 @@ async function doScan(){
   }
 }
 
+function toggleContinuous(){
+  if(continuousRunning){
+    // Stop
+    continuousStop = true;
+    continuousRunning = false;
+    document.getElementById('bcs').textContent = '⟳ Continuous Scan';
+    document.getElementById('bcs').className = 'btn btn-continuous';
+    document.getElementById('continuous-status').style.display = 'none';
+    log(`Continuous scan stopped after ${continuousCycles} cycle(s)`,'warn');
+    setStatus('Continuous scan stopped', true, false);
+  } else {
+    // Start
+    continuousRunning = true;
+    continuousStop    = false;
+    continuousCycles  = 0;
+    document.getElementById('bcs').textContent = '◼ Stop Continuous';
+    document.getElementById('bcs').className = 'btn btn-continuous running';
+    document.getElementById('continuous-status').style.display = 'block';
+    document.getElementById('bs').disabled = true;
+    document.getElementById('bwp').disabled = true;
+    document.getElementById('bwk').disabled = true;
+    log('Continuous scan started — scanning until stopped','info');
+    runContinuous();
+  }
+}
+
+async function runContinuous(){
+  while(continuousRunning && !continuousStop){
+    continuousCycles++;
+    const statusEl = document.getElementById('continuous-status');
+    statusEl.textContent = `CYCLE ${continuousCycles} | ${Object.keys(tagStore).length} TAGS`;
+    setStatus(`Continuous scan — cycle ${continuousCycles}`, true, true);
+    try{
+      const r = await fetchWithTimeout(`${API}/scan`,{method:'POST'},20000);
+      const d = await r.json();
+      if(d.error){
+        log('Continuous scan error: '+d.error,'err');
+        continuousRunning = false;
+        break;
+      }
+      if(d.log) parseLog(d.log);
+      mergeTags(d.tags||[]);
+    } catch(e){
+      log('Continuous scan failed: '+e.message,'err');
+      continuousRunning = false;
+      break;
+    }
+    // Brief pause between cycles so the server COM port releases
+    if(continuousRunning && !continuousStop)
+      await new Promise(r=>setTimeout(r,800));
+  }
+  // Clean up if loop exited due to error
+  if(!continuousStop){
+    document.getElementById('bcs').textContent = '⟳ Continuous Scan';
+    document.getElementById('bcs').className = 'btn btn-continuous';
+    document.getElementById('continuous-status').style.display = 'none';
+    log(`Continuous scan ended after ${continuousCycles} cycle(s)`,'warn');
+  }
+  continuousRunning = false;
+  continuousStop    = false;
+  setStatus('Ready', true, false);
+  // Re-enable buttons
+  document.getElementById('bs').disabled  = !connected;
+  document.getElementById('bwp').disabled = !connected;
+  document.getElementById('bwk').disabled = !connected;
+}
+
 async function doWritePart(){
   const part=parseInt(document.getElementById('part').value);
   if(isNaN(part)||part<0||part>9999){log('Enter a valid part number 0-9999','err');return;}
@@ -876,17 +942,6 @@ async function doBomCheck(){
     html.push(`</div>`); // close kit-block
   });
 
-  // Update in-GUI summary panel — keep it minimal, full report is in the new tab
-  document.getElementById('bom-summary').innerHTML=`
-    <div class="ws-item"><div class="ws-label">Kits Checked</div><div class="ws-val info">${totalKits}</div></div>
-    <div class="ws-item"><div class="ws-label">Passed</div><div class="ws-val ok">${passKits}</div></div>
-    <div class="ws-item"><div class="ws-label">Failed</div><div class="ws-val ${failKits>0?'err':'skip'}">${failKits}</div></div>
-    <div class="ws-item"><div class="ws-label">Missing Parts</div><div class="ws-val ${totalMissing>0?'err':'skip'}">${totalMissing}</div></div>
-    <div class="ws-item"><div class="ws-label">Expected / Kit</div><div class="ws-val info">${expectedParts.length}</div></div>
-    <div class="ws-item" style="margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:11px;align-self:center;">Full report opened in new tab</div>`;
-  document.getElementById('bom-table-wrap').innerHTML = '';
-  document.getElementById('bom-panel').className = 'bom-panel visible';
-
   log(failKits>0
     ? `BOM check: ${failKits} kit(s) FAILED — ${totalMissing} missing part(s) total`
     : `BOM check: all ${passKits} kit(s) PASSED`,
@@ -905,6 +960,7 @@ async function doBomCheck(){
         rfid: p.rfid,
         description: p.description || p.partNumber || '',
         qty: p.qty,
+        link: p.link || '',
         presentCount: presentIn.length,
         missingCount: missingIn.length,
         missingKits: missingIn.join(', ')
@@ -939,10 +995,17 @@ async function doBomCheck(){
     var missCls = r.missingCount>0 ? 'col-miss' : 'col-none';
     var missVal = r.missingCount>0 ? r.missingCount : '&mdash;';
     var kits = r.missingKits || '&mdash;';
-    return '<tr class="'+cls+'"><td class="col-rfid">'+r.rfid+'</td><td>'+r.description+'</td>'
+    var linkCell = r.link
+      ? '<a href="'+r.link+'" target="_blank" class="order-link">Order &rarr;</a>'
+      : '<span style="color:#4a5068">&mdash;</span>';
+    return '<tr class="'+cls+'">'
+      +'<td class="col-rfid">'+r.rfid+'</td>'
+      +'<td>'+r.description+'</td>'
       +'<td class="col-ok">'+r.presentCount+'</td>'
       +'<td class="'+missCls+'">'+missVal+'</td>'
-      +'<td class="col-kits">'+kits+'</td></tr>';
+      +'<td class="col-kits">'+kits+'</td>'
+      +'<td>'+linkCell+'</td>'
+      +'</tr>';
   }).join('');
 
   // Kit-by-kit HTML (all kits)
@@ -1006,19 +1069,21 @@ async function doBomCheck(){
     + '.master-tbl th{background:#13161e;border-bottom:1px solid #1f2330;color:#4a5068;font-size:10px;letter-spacing:2px;padding:9px 12px;text-align:left;text-transform:uppercase;position:sticky;top:0;}'
     + '.master-tbl td{padding:7px 12px;border-bottom:1px solid #1f2330;}'
     + '.master-tbl tr:hover td{background:#13161e;}'
-    + '.master-tbl tr.has-miss td{background:rgba(255,23,68,.04);}'
+    + '.master-tbl tr.has-miss td{background:rgba(255,23,68,.18);}'
     + '.col-rfid{color:#00e5ff;font-weight:700;}.col-ok{color:#00e676;text-align:center;font-weight:700;}'
-    + '.col-miss{color:#ff1744;text-align:center;font-weight:700;}.col-none{color:#4a5068;text-align:center;}.col-kits{color:#4a5068;font-size:11px;}'
+    + '.col-miss{color:#ff4444;text-align:center;font-weight:700;}.col-none{color:#4a5068;text-align:center;}.col-kits{color:#ff4444;font-size:11px;}'
+    + '.order-link{color:#ff6b35;font-weight:700;font-size:11px;text-decoration:none;border:1px solid #ff6b35;border-radius:3px;padding:2px 8px;white-space:nowrap;}'
+    + '.order-link:hover{background:#ff6b35;color:#fff;}'
     + '.kit-block{margin-bottom:20px;border:1px solid #1f2330;border-radius:6px;overflow:hidden;}'
     + '.kit-hdr{display:flex;align-items:center;gap:16px;padding:10px 16px;background:#13161e;border-bottom:1px solid #1f2330;}'
     + '.kit-num{font-family:"Share Tech Mono",monospace;font-size:14px;font-weight:700;}'
-    + '.kit-pass{color:#00e676;font-size:12px;}.kit-fail{color:#ff1744;font-size:12px;}'
+    + '.kit-pass{color:#00e676;font-size:12px;}.kit-fail{color:#ff4444;font-size:12px;}'
     + '.part-row{display:grid;grid-template-columns:32px 70px 1fr 90px;border-bottom:1px solid #1f2330;font-family:"Share Tech Mono",monospace;font-size:12px;}'
     + '.part-row:last-child{border-bottom:none;}.part-row>div{padding:7px 12px;}'
-    + '.row-miss{background:rgba(255,23,68,.06);color:#ff1744;}'
+    + '.row-miss{background:rgba(255,23,68,.22);color:#ff4444;}'
     + '.row-ok{color:#4a5068;}.row-ok .st{color:#00e676;}.row-extra{color:#ffea00;}'
     + '.badge{border-radius:3px;font-size:10px;font-weight:700;padding:2px 6px;letter-spacing:1px;}'
-    + '.b-miss{background:rgba(255,23,68,.15);color:#ff1744;}'
+    + '.b-miss{background:rgba(255,23,68,.30);color:#ff4444;}'
     + '.b-ok{background:rgba(0,230,118,.12);color:#00e676;}'
     + '.b-ext{background:rgba(255,234,0,.12);color:#ffea00;}'
     + '@media print{.btn-bar,.tab-bar{display:none;}body{background:#fff;color:#000;}'
@@ -1034,8 +1099,8 @@ async function doBomCheck(){
     + '<div class="subtitle">'+dt+' &nbsp;|&nbsp; '+totalKits+' KITS &nbsp;|&nbsp; '+expectedParts.length+' PARTS EXPECTED</div></div>'
     + '<div class="summary">'
     + '<div class="sm-item"><div class="lbl">Kits Checked</div><div class="val c-cyan">'+totalKits+'</div></div>'
-    + '<div class="sm-item"><div class="lbl">Passed</div><div class="val c-ok">'+passKits+'</div></div>'
-    + '<div class="sm-item"><div class="lbl">Failed</div><div class="val '+(failKits>0?'c-err':'c-muted')+'">'+failKits+'</div></div>'
+    + '<div class="sm-item"><div class="lbl">Complete Kits</div><div class="val c-ok">'+passKits+'</div></div>'
+    + '<div class="sm-item"><div class="lbl">Incomplete Kits</div><div class="val '+(failKits>0?'c-err':'c-muted')+'">'+failKits+'</div></div>'
     + '<div class="sm-item"><div class="lbl">Missing Parts</div><div class="val '+(totalMissing>0?'c-err':'c-muted')+'">'+totalMissing+'</div></div>'
     + '<div class="sm-item"><div class="lbl">Expected / Kit</div><div class="val c-cyan">'+expectedParts.length+'</div></div>'
     + '</div>'
@@ -1050,6 +1115,7 @@ async function doBomCheck(){
     + '<th style="text-align:center">Present</th>'
     + '<th style="text-align:center">Missing</th>'
     + '<th>Missing From Kits</th>'
+    + '<th>Order</th>'
     + '</tr></thead><tbody>'+masterRowsHtml+'</tbody></table>'
     + '</div>'
     + '<div class="tab-content" id="tab-kits">'+allKitsHtml+'</div>'
@@ -1071,10 +1137,10 @@ async function doBomCheck(){
     + '}'
     + 'function exportXLSX(){'
     + '  var wb=XLSX.utils.book_new();'
-    + '  var mRows=[["Part #","Description","Expected in Each Kit","Present in Kits","Missing from Kits","Kits Missing From"]];'
-    + '  RESULTS.masterList.forEach(function(p){mRows.push([p.rfid,p.description,RESULTS.totalKits,p.presentCount,p.missingCount,p.missingKits]);});'
+    + '  var mRows=[["Part #","Description","Expected in Each Kit","Present in Kits","Missing from Kits","Kits Missing From","Order Link"]];'
+    + '  RESULTS.masterList.forEach(function(p){mRows.push([p.rfid,p.description,RESULTS.totalKits,p.presentCount,p.missingCount,p.missingKits,p.link||""]);});'
     + '  var mWS=XLSX.utils.aoa_to_sheet(mRows);'
-    + '  mWS["!cols"]=[{wch:10},{wch:55},{wch:22},{wch:18},{wch:18},{wch:40}];'
+    + '  mWS["!cols"]=[{wch:10},{wch:55},{wch:22},{wch:18},{wch:18},{wch:40},{wch:45}];'
     + '  for(var c=0;c<=5;c++){var a=XLSX.utils.encode_cell({r:0,c:c});if(mWS[a])mWS[a].s={font:{bold:true,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1F2330"}},alignment:{horizontal:"center"}};}'
     + '  for(var r=1;r<=RESULTS.masterList.length;r++){if(RESULTS.masterList[r-1].missingCount>0){for(var c=0;c<=5;c++){var a=XLSX.utils.encode_cell({r:r,c:c});if(mWS[a])mWS[a].s={fill:{fgColor:{rgb:"FFF8F8"}}};}}}'
     + '  XLSX.utils.book_append_sheet(wb,mWS,"Master Parts List");'
@@ -1217,32 +1283,23 @@ async function pollStatus(){
 
 // ── Drag handles ──
 (function(){
-  const right = document.querySelector('.right');
+  const right      = document.querySelector('.right');
   const tagPanel   = document.querySelector('.tag-panel');
   const writePanel = document.getElementById('write-panel');
-  const bomPanel   = document.getElementById('bom-panel');
   const logPanel   = document.querySelector('.log-panel');
   const dh1 = document.getElementById('dh1');
   const dh2 = document.getElementById('dh2');
-  const dh3 = document.getElementById('dh3');
 
-  let tagH=0, writeH=0, bomH=0, logH=0;
+  let tagH=0, writeH=0, logH=0;
   const HANDLE_H = 5;
-  const MIN_H = 40;
-
-  function countVisibleHandles(){
-    // dh1 always visible; dh2 between write and bom; dh3 between bom and log
-    return 3; // always 3 handles in DOM
-  }
+  const MIN_H    = 40;
 
   function initHeights(){
     const total = right.clientHeight;
-    const handles = 3 * HANDLE_H;
-    const avail = total - handles;
+    const avail = total - 2 * HANDLE_H;
     writeH = writePanel.classList.contains('visible') ? 160 : 0;
-    bomH   = bomPanel.classList.contains('visible')   ? 160 : 0;
     logH   = 150;
-    tagH   = avail - writeH - bomH - logH;
+    tagH   = avail - writeH - logH;
     if(tagH < MIN_H) tagH = MIN_H;
     applyHeights();
   }
@@ -1250,34 +1307,18 @@ async function pollStatus(){
   function applyHeights(){
     tagPanel.style.height   = tagH   + 'px';
     writePanel.style.height = writeH + 'px';
-    bomPanel.style.height   = bomH   + 'px';
     logPanel.style.height   = logH   + 'px';
   }
 
-  // Hook renderWriteResults to rebalance when write panel appears
+  // Rebalance when write panel appears
   const origRender = window.renderWriteResults;
   window.renderWriteResults = function(rawLog, label){
     origRender(rawLog, label);
     requestAnimationFrame(()=>{
       if(writeH === 0){
-        const total = right.clientHeight - 3*HANDLE_H;
+        const avail = right.clientHeight - 2*HANDLE_H;
         writeH = 160;
-        tagH = total - writeH - bomH - logH;
-        if(tagH < MIN_H) tagH = MIN_H;
-        applyHeights();
-      }
-    });
-  };
-
-  // Hook doBomCheck to rebalance when bom panel appears
-  const origBomCheck = window.doBomCheck;
-  window.doBomCheck = async function(){
-    await origBomCheck();
-    requestAnimationFrame(()=>{
-      if(bomH === 0 && document.getElementById('bom-panel').classList.contains('visible')){
-        const total = right.clientHeight - 3*HANDLE_H;
-        bomH = 160;
-        tagH = total - writeH - bomH - logH;
+        tagH   = avail - writeH - logH;
         if(tagH < MIN_H) tagH = MIN_H;
         applyHeights();
       }
@@ -1312,8 +1353,7 @@ async function pollStatus(){
   }
 
   makeDragger(dh1, ()=>tagH,   ()=>writeH, v=>tagH=v,   v=>writeH=v);
-  makeDragger(dh2, ()=>writeH, ()=>bomH,   v=>writeH=v, v=>bomH=v);
-  makeDragger(dh3, ()=>bomH,   ()=>logH,   v=>bomH=v,   v=>logH=v);
+  makeDragger(dh2, ()=>writeH, ()=>logH,   v=>writeH=v, v=>logH=v);
 
   window.addEventListener('load',   initHeights);
   window.addEventListener('resize', initHeights);

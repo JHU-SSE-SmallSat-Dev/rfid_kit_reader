@@ -13,6 +13,27 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
 
 
 ================================================================================
+  DEPENDENCIES
+================================================================================
+
+  Required to BUILD (compile the C source code):
+  - MinGW-w64 GCC (winlibs.com, GCC 15.x recommended)
+  - MercuryAPI 1.37.2.24 C source (must be this exact version)
+
+  Required to RUN the GUI and command-line tools:
+  - Any modern web browser (Chrome, Firefox, Edge)
+  - SparkFun Simultaneous RFID Reader (M7E Hecto) + serial adapter
+
+  Required to RUN the BOM checker (optional feature):
+  - Python 3.10 or newer  (python.org)
+  - pandas  1.3+          (pip install pandas)
+  - openpyxl  3.0+        (pip install openpyxl)
+
+  Quick install for all Python dependencies:
+    pip install pandas openpyxl
+
+
+================================================================================
   GETTING STARTED
 ================================================================================
 
@@ -56,13 +77,34 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
      "Add Python to PATH" before clicking Install.
   4. Verify in a new Command Prompt:
        python --version
+     Should print: Python 3.x.x
 
   Install required Python packages:
-       pip install pandas openpyxl
 
-  Both packages are needed:
-    pandas   - reads the BOM.xlsx file
-    openpyxl - required by pandas to open .xlsx files
+    pip install pandas openpyxl
+
+  Package details:
+
+    pandas (>=1.3)
+      Reads and parses BOM.xlsx into a structured table.
+      Used by bom_export.py to extract part numbers, descriptions,
+      quantities, and order links.
+        pip install pandas
+
+    openpyxl (>=3.0)
+      Required by pandas to open .xlsx format Excel files.
+      Without this, pandas cannot read BOM.xlsx at all.
+        pip install openpyxl
+
+  Both can be installed in one command:
+    pip install pandas openpyxl
+
+  Verify installation:
+    python -c "import pandas; import openpyxl; print('OK')"
+
+  Note: the BOM checker will show "BOM not found" or fail silently
+  if either package is missing. If Python itself is not on PATH, the
+  server will log an error when Check BOM is clicked.
 
 
 --------------------------------------------------------------------------------
@@ -511,10 +553,14 @@ a Bill of Materials (BOM), and missing parts identified for reorder or tracking.
     The COM port is held by another process (or a previous failed run).
     Wait 2-3 seconds and try again. The server retries automatically once.
 
-  BOM checker shows "BOM not found"
-    Make sure files\BOM.xlsx exists and Python + pandas are installed.
-    Test with:  python bom_export.py files\BOM.xlsx
-    If Python is not found, re-do Step 2.
+  BOM checker shows "BOM not found" or fails
+    First verify both Python packages are installed:
+      python -c "import pandas; import openpyxl; print('OK')"
+    If the import fails, run: pip install pandas openpyxl
+    Then verify the BOM file path is correct:
+      python bom_export.py files\BOM.xlsx
+    If Python itself is not found, re-do Step 2 and open a new
+    Command Prompt after installing.
 
   Tags not detected during scan
     - Check reader power switch is on

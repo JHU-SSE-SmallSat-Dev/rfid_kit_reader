@@ -1,7 +1,7 @@
 """
 bom_export.py
 Called by rfid_server.exe to read BOM.xlsx and output JSON to stdout.
-Returns all parts in the BOM with their RFID part number and description.
+Returns all parts in the BOM with their RFID part number, description, and order link.
 
 Usage: python bom_export.py <path_to_BOM.xlsx>
 Requires: pip install pandas openpyxl
@@ -28,25 +28,31 @@ if 'RFID Part Number' not in df.columns:
     print(json.dumps({"error": "'RFID Part Number' column not found in BOM"}))
     sys.exit(1)
 
+def clean(val):
+    s = str(val).strip()
+    return '' if s in ('nan', 'None', '') else s
+
+def is_url(val):
+    s = clean(val)
+    return s.startswith('http://') or s.startswith('https://')
+
 rows = []
 for _, r in df.iterrows():
     pn = r.get('RFID Part Number', '')
-    if str(pn).strip() in ('', 'nan'):
+    if clean(str(pn)) == '':
         continue
     try:
         rfid = str(int(float(pn))).zfill(4)
     except (ValueError, TypeError):
         continue
 
-    desc = str(r.get('Description', ''))
-    part = str(r.get('Part Number', ''))
-    qty  = str(r.get('Qty', '1'))
-
+    link_raw = clean(r.get('Link', ''))
     rows.append({
         'rfid':        rfid,
-        'partNumber':  '' if part in ('nan', '') else part,
-        'description': '' if desc in ('nan', '') else desc,
-        'qty':         qty,
+        'partNumber':  clean(r.get('Part Number', '')),
+        'description': clean(r.get('Description', '')),
+        'qty':         clean(r.get('Qty', '1')),
+        'link':        link_raw if is_url(link_raw) else '',
     })
 
 print(json.dumps(rows))
